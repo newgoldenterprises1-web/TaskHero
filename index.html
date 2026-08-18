@@ -15,10 +15,11 @@
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
 
-    <div id="splashScreen" class="screen active fixed inset-0 flex flex-col items-center justify-center bg-slate-900 z-[100]">
+    <div id="splashScreen" class="screen active fixed inset-0 flex flex-col items-center justify-center bg-slate-900 z-[100] cursor-pointer" onclick="forceSkipSplash()">
         <div class="animate-bounce mb-4 bg-amber-500 text-slate-950 font-black px-6 py-4 rounded-3xl text-4xl shadow-lg shadow-amber-500/20">TH</div>
         <h1 class="text-3xl font-black text-white tracking-tight">Task<span class="text-amber-400">Hero</span></h1>
         <p class="text-slate-400 text-sm mt-2">Kaam Chota Ho Ya Bada, Hero Hai Khada!</p>
+        <p class="text-amber-400/70 text-xs mt-6 animate-pulse">(Tap anywhere if it takes too long)</p>
     </div>
 
     <div id="authScreen" class="screen fixed inset-0 bg-slate-900 p-6 flex flex-col justify-center max-w-md mx-auto z-[90]">
@@ -167,10 +168,19 @@
     </div>
 
     <script>
+        // Automatic Splash Timer (moves to Auth Screen after 2 seconds)
         setTimeout(() => {
-            document.getElementById('splashScreen').classList.remove('active');
-            document.getElementById('authScreen').classList.add('active');
+            forceSkipSplash();
         }, 2000);
+
+        function forceSkipSplash() {
+            const splash = document.getElementById('splashScreen');
+            const auth = document.getElementById('authScreen');
+            if (splash && auth) {
+                splash.classList.remove('active');
+                auth.classList.add('active');
+            }
+        }
 
         function showSignup() {
             document.getElementById('loginForm').classList.add('hidden');
