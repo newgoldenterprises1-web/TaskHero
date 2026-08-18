@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Razorpay Checkout Script -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
 
@@ -23,7 +25,6 @@
             </div>
         </div>
 
-        <!-- Location & Search Bar -->
         <div class="hidden md:flex items-center space-x-3 flex-1 max-w-xl mx-8">
             <div class="flex items-center bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-sm text-slate-300">
                 <i class="fa-solid fa-location-dot text-amber-400 mr-2"></i>
@@ -45,13 +46,12 @@
         </div>
     </nav>
 
-    <!-- Hero Section with Background Banner -->
+    <!-- Hero Section -->
     <header class="relative bg-slate-950 text-white overflow-hidden border-b border-slate-800 py-16 lg:py-24 px-6 lg:px-12">
         <div class="absolute inset-0 z-0 opacity-25">
             <img src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1600&auto=format&fit=crop" alt="Background" class="w-full h-full object-cover">
         </div>
         <div class="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent z-10"></div>
-        
         <div class="relative z-20 max-w-3xl">
             <span class="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider inline-flex items-center mb-4">
                 <i class="fa-solid fa-bolt mr-1.5"></i> Hyderabad's #1 Home Services App
@@ -60,7 +60,7 @@
                 Expert Home Services In Minutes, At Your Doorstep
             </h1>
             <p class="text-slate-300 text-base lg:text-lg mb-8 max-w-xl">
-                From quick electrical fixes and deep cleaning to appliance repairs — book background-verified TaskHeroes across Hyderabad with transparent pricing.
+                From quick electrical fixes and deep cleaning to appliance repairs — book background-verified TaskHeroes across Hyderabad with online or cash payment options.
             </p>
             
             <!-- Trust Badges Grid -->
@@ -88,7 +88,7 @@
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 lg:px-12 py-10">
         
-        <!-- Category Filter Tabs (All Active) -->
+        <!-- Category Filter Tabs -->
         <div class="flex items-center space-x-3 overflow-x-auto pb-4 mb-8">
             <button onclick="filterCategory('all')" id="btn-all" class="category-btn bg-amber-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-sm shadow-md whitespace-nowrap transition">All Services</button>
             <button onclick="filterCategory('Electrician')" id="btn-Electrician" class="category-btn bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold px-5 py-2.5 rounded-xl text-sm border border-slate-800 whitespace-nowrap transition">⚡ Electrician</button>
@@ -97,13 +97,13 @@
             <button onclick="filterCategory('Appliances')" id="btn-Appliances" class="category-btn bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold px-5 py-2.5 rounded-xl text-sm border border-slate-800 whitespace-nowrap transition">❄️ AC & Appliances</button>
         </div>
 
-        <!-- Services Grid -->
+        <!-- Services Grid Header -->
         <h2 class="text-2xl font-black text-white mb-6 flex items-center">
             <i class="fa-solid fa-fire text-amber-500 mr-2.5"></i> Popular Services in Hyderabad
         </h2>
 
         <div id="servicesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Rendered dynamically -->
+            <!-- Dynamically Rendered Services -->
         </div>
     </main>
 
@@ -128,6 +128,18 @@
                     <input type="text" id="custName" placeholder="Your Full Name" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
                     <input type="tel" id="custPhone" placeholder="Mobile Number (+91)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
                     <textarea id="custAddress" placeholder="Hyderabad Address (e.g., Gachibowli, Banjara Hills)" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"></textarea>
+                    
+                    <!-- Payment Method Selector -->
+                    <div class="flex gap-4 pt-2">
+                        <label class="flex items-center space-x-2 text-sm text-white cursor-pointer bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 flex-1">
+                            <input type="radio" name="payMethod" value="online" checked class="accent-amber-500">
+                            <span>Razorpay Online</span>
+                        </label>
+                        <label class="flex items-center space-x-2 text-sm text-white cursor-pointer bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 flex-1">
+                            <input type="radio" name="payMethod" value="cod" class="accent-amber-500">
+                            <span>Cash on Service</span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="flex justify-between items-center mb-4 bg-slate-950 p-3 rounded-xl border border-slate-800">
@@ -135,15 +147,20 @@
                     <span id="cartTotal" class="text-xl font-black text-amber-400">₹0</span>
                 </div>
 
-                <button onclick="checkoutBooking()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg shadow-amber-500/20 transition">
-                    Confirm & Book Service
+                <button onclick="processCheckout()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg shadow-amber-500/20 transition">
+                    Proceed to Pay & Book
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Complete Functional Scripts -->
+    <!-- Complete Functional JavaScript Script -->
     <script>
+        // Supabase Configuration (Replace with your keys)
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         const services = [
             { id: 1, name: "Minimum Visit & Small Fixes", category: "Electrician", price: 49, originalPrice: 99, rating: "4.9 (1.2k)", desc: "Minor electrical repairs & general inspection", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=600&auto=format&fit=crop", discount: "51% OFF" },
             { id: 2, name: "Switch / Socket Replacement", category: "Electrician", price: 99, originalPrice: 199, rating: "4.8 (850)", desc: "Electrical switch & main board repairs", image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=600&auto=format&fit=crop", discount: "50% OFF" },
@@ -268,7 +285,31 @@
             document.getElementById('cartModal').classList.add('hidden');
         }
 
-        function checkoutBooking() {
+        async function saveBookingToSupabase(paymentStatus, paymentId = 'COD') {
+            const name = document.getElementById('custName').value;
+            const phone = document.getElementById('custPhone').value;
+            const address = document.getElementById('custAddress').value;
+            const total = cart.reduce((sum, item) => sum + item.price, 0);
+            const serviceNames = cart.map(i => i.name).join(', ');
+
+            const { data, error } = await supabaseClient
+                .from('bookings')
+                .insert([
+                    { customer_name: name, phone: phone, address: address, service_name: serviceNames, amount: total, payment_status: paymentStatus, payment_id: paymentId, status: 'Pending' }
+                ]);
+
+            if (error) {
+                console.error('Supabase Error:', error);
+                alert('Booking completed, but database synchronization failed.');
+            } else {
+                alert('Booking Confirmed Successfully in Hyderabad!');
+                cart = [];
+                updateCartUI();
+                closeCartModal();
+            }
+        }
+
+        function processCheckout() {
             if(cart.length === 0) {
                 alert("Your cart is empty!");
                 return;
@@ -278,17 +319,39 @@
             const address = document.getElementById('custAddress').value;
 
             if(!name || !phone || !address) {
-                alert("Please fill in your name, phone number and Hyderabad address.");
+                alert("Please fill in your name, mobile number and Hyderabad address.");
                 return;
             }
 
-            alert("Booking Successful! TaskHero will reach you soon in Hyderabad.");
-            cart = [];
-            updateCartUI();
-            closeCartModal();
+            const totalAmount = cart.reduce((sum, item) => sum + item.price, 0);
+            const payMethod = document.querySelector('input[name="payMethod"]:checked').value;
+
+            if (payMethod === 'cod') {
+                saveBookingToSupabase('Unpaid (COD)', 'COD_ORDER');
+            } else {
+                var options = {
+                    "key": "rzp_test_YOUR_RAZORPAY_KEY", 
+                    "amount": totalAmount * 100, 
+                    "currency": "INR",
+                    "name": "TaskHero Hyderabad",
+                    "description": "Home Services Booking Payment",
+                    "handler": function (response) {
+                        saveBookingToSupabase('Paid Online', response.razorpay_payment_id);
+                    },
+                    "prefill": {
+                        "name": name,
+                        "contact": phone
+                    },
+                    "theme": {
+                        "color": "#f59e0b"
+                    }
+                };
+                var rzp1 = new Razorpay(options);
+                rzp1.open();
+            }
         }
 
-        // Initial Setup Render
+        // Initial Render
         renderServices();
     </script>
 </body>
