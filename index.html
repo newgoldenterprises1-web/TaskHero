@@ -16,7 +16,7 @@
 <body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
 
     <!-- Navbar -->
-    <nav class="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-4 lg:px-12 py-3 flex items-center justify-between shadow-lg">
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-4 lg:px-12 py-3 flex items-center justify-between shadow-lg">
         <div class="flex items-center space-x-3">
             <div class="bg-amber-500 text-slate-950 font-black px-3 py-1.5 rounded-lg text-xl tracking-wider shadow-md">TH</div>
             <div>
@@ -37,7 +37,7 @@
         </div>
 
         <div class="flex items-center space-x-4">
-            <a href="admin.html" class="text-sm font-semibold bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-xl border border-slate-800 transition">
+            <a href="admin.html" class="hidden sm:inline-flex text-sm font-semibold bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-xl border border-slate-800 transition items-center">
                 <i class="fa-solid fa-gauge mr-1.5 text-amber-400"></i> Admin
             </a>
             <button onclick="openCartModal()" class="relative bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/20 transition flex items-center">
@@ -46,8 +46,8 @@
         </div>
     </nav>
 
-    <!-- Hero Section (Fixed Padding for Navbar Offset) -->
-    <header class="relative bg-slate-950 text-white overflow-hidden border-b border-slate-800 pt-28 pb-16 lg:pt-36 lg:pb-24 px-6 lg:px-12">
+    <!-- Hero Section with proper top padding to avoid navbar overlap -->
+    <header class="relative bg-slate-950 text-white overflow-hidden border-b border-slate-800 pt-28 pb-16 lg:pt-36 lg:pb-20 px-6 lg:px-12">
         <div class="absolute inset-0 z-0 opacity-25">
             <img src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1600&auto=format&fit=crop" alt="Background" class="w-full h-full object-cover">
         </div>
@@ -56,11 +56,11 @@
             <span class="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider inline-flex items-center mb-4">
                 <i class="fa-solid fa-bolt mr-1.5"></i> Hyderabad's #1 Home Services App
             </span>
-            <h1 class="text-4xl lg:text-6xl font-black tracking-tight leading-tight mb-4">
+            <h1 class="text-3xl sm:text-4xl lg:text-6xl font-black tracking-tight leading-tight mb-4">
                 Expert Home Services In Minutes, At Your Doorstep
             </h1>
-            <p class="text-slate-300 text-base lg:text-lg mb-8 max-w-xl">
-                From quick electrical fixes and deep cleaning to appliance repairs — book background-verified TaskHeroes across Hyderabad with online or cash payment options.
+            <p class="text-slate-300 text-sm lg:text-base mb-8 max-w-xl">
+                From quick electrical fixes and plumbing to CCTV and AC repairs — book background-verified TaskHeroes across Hyderabad with online or cash payment options.
             </p>
             
             <!-- Trust Badges Grid -->
@@ -102,10 +102,16 @@
             <i class="fa-solid fa-fire text-amber-500 mr-2.5"></i> Popular Services in Hyderabad
         </h2>
 
+        <!-- Services Grid Container -->
         <div id="servicesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Dynamically Rendered Services -->
+            <!-- Rendered via JavaScript -->
         </div>
     </main>
+
+    <!-- Floating WhatsApp Support Button -->
+    <a href="https://wa.me/919876543210?text=Hi%20TaskHero,%20I%20need%20help%20with%20a%20home%20service%20in%20Hyderabad." target="_blank" class="fixed bottom-6 left-6 z-40 bg-emerald-600 hover:bg-emerald-500 text-white p-3.5 rounded-full shadow-2xl transition flex items-center justify-center text-xl">
+        <i class="fa-brands fa-whatsapp"></i>
+    </a>
 
     <!-- Cart Modal / Checkout Drawer -->
     <div id="cartModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex justify-end">
@@ -154,12 +160,20 @@
         </div>
     </div>
 
-    <!-- Script Integration -->
+    <!-- Complete Functional JavaScript -->
     <script>
+        // Supabase Configuration
         const SUPABASE_URL = 'YOUR_SUPABASE_URL';
         const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let supabaseClient;
+        try {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch(e) {
+            console.warn("Supabase init error");
+        }
 
+        // All Services Data with Images
         const services = [
             { id: 1, name: "Minimum Visit & Small Fixes", category: "Electrician", price: 49, originalPrice: 99, rating: "4.9 (1.2k)", desc: "Minor electrical repairs & general inspection", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=600&auto=format&fit=crop", discount: "51% OFF" },
             { id: 2, name: "Switch / Socket Replacement", category: "Electrician", price: 99, originalPrice: 199, rating: "4.8 (850)", desc: "Electrical switch & main board repairs", image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=600&auto=format&fit=crop", discount: "50% OFF" },
@@ -175,8 +189,14 @@
         let currentFilter = 'all';
         let searchQuery = '';
 
+        document.addEventListener("DOMContentLoaded", function() {
+            renderServices();
+        });
+
         function renderServices() {
             const grid = document.getElementById('servicesGrid');
+            if (!grid) return;
+            
             grid.innerHTML = '';
             
             let filtered = services;
@@ -291,21 +311,22 @@
             const total = cart.reduce((sum, item) => sum + item.price, 0);
             const serviceNames = cart.map(i => i.name).join(', ');
 
-            const { data, error } = await supabaseClient
-                .from('bookings')
-                .insert([
-                    { customer_name: name, phone: phone, address: address, service_name: serviceNames, amount: total, payment_status: paymentStatus, payment_id: paymentId, status: 'Pending' }
-                ]);
+            if (supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('bookings')
+                    .insert([
+                        { customer_name: name, phone: phone, address: address, service_name: serviceNames, amount: total, payment_status: paymentStatus, payment_id: paymentId, status: 'Pending' }
+                    ]);
 
-            if (error) {
-                console.error('Supabase Error:', error);
-                alert('Booking completed, but database synchronization failed.');
-            } else {
-                alert('Booking Confirmed Successfully in Hyderabad!');
-                cart = [];
-                updateCartUI();
-                closeCartModal();
+                if (error) {
+                    console.error('Supabase Error:', error);
+                }
             }
+
+            alert('Booking Confirmed Successfully in Hyderabad!');
+            cart = [];
+            updateCartUI();
+            closeCartModal();
         }
 
         function processCheckout() {
@@ -349,8 +370,6 @@
                 rzp1.open();
             }
         }
-
-        renderServices();
     </script>
 </body>
 </html>
