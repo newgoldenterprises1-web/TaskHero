@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaskHero - Kaam Chota Ho Ya Bada, Hero Hai Khada!</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS Client v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brandNavy: '#0F172A',
+            brandNavyLight: '#1E293B',
+            brandGold: '#F59E0B',
+            brandGoldHover: '#D97706',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-brandNavy text-slate-100 min-h-screen font-sans antialiased">
+
+  <!-- Sticky Header -->
+  <header class="border-b border-slate-800 bg-slate-950/90 sticky top-0 z-40 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand Logo & Tagline -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg shadow-amber-500/20">
+          T
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-black tracking-tight text-white">Task<span class="text-amber-500">Hero</span></h1>
+            <span class="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full hidden sm:inline-block">
+              Kaam Chota Ho Ya Bada, Hero Hai Khada!
+            </span>
+          </div>
+          <p class="text-[10px] text-slate-400 font-semibold tracking-wider">ON-DEMAND HOME SERVICE MARKETPLACE</p>
+        </div>
+      </div>
+
+      <!-- Location Selector & Search -->
+      <div class="flex items-center gap-2 flex-1 max-w-md mx-2">
+        <div class="relative min-w-[130px]">
+          <select id="locationSelect" class="w-full bg-slate-800 border border-slate-700 text-xs font-semibold rounded-lg px-2.5 py-2 text-slate-200 focus:outline-none focus:border-amber-500">
+            <option value="Hyderabad">📍 Hyderabad</option>
+            <option value="Hitech City">📍 Hitech City</option>
+            <option value="Gachibowli">📍 Gachibowli</option>
+            <option value="Madhapur">📍 Madhapur</option>
+            <option value="Kukatpally">📍 Kukatpally</option>
+          </select>
+        </div>
+        <div class="relative w-full">
+          <input type="text" id="searchInput" onkeyup="searchServices()" placeholder="Search 'Electrician', 'AC Repair'..." class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-500">
+          <span class="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+        </div>
+      </div>
+
+      <!-- Cart / Action Button -->
+      <button onclick="scrollToServices()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition-all shadow-md shadow-amber-500/20 flex items-center gap-2">
+        <span>⚡ Book Now</span>
+      </button>
+
+    </div>
+  </header>
+
+  <!-- Hero Banner -->
+  <section class="max-w-7xl mx-auto px-4 py-12 text-center relative overflow-hidden">
+    <div class="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold px-4 py-1.5 rounded-full mb-4">
+      <span>🚀</span> Official Tagline: "Kaam Chota Ho Ya Bada, Hero Hai Khada!"
+    </div>
+    <h2 class="text-3xl sm:text-5xl font-black text-white leading-tight max-w-3xl mx-auto mb-4">
+      Expert Home Services In Minutes, At Your Doorstep
+    </h2>
+    <p class="text-slate-400 text-sm sm:text-base max-w-xl mx-auto mb-6">
+      From quick electrical fixes to deep cleaning and CCTV installations — book verified TaskHeroes across Hyderabad with transparent pricing.
+    </p>
+
+    <!-- Location Detection Bar -->
+    <div class="inline-flex items-center gap-2 bg-slate-800/80 border border-slate-700 rounded-xl p-2 max-w-md w-full">
+      <button onclick="detectGPSLocation()" class="bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
+        🎯 Auto-Detect GPS
+      </button>
+      <span class="text-xs text-slate-400 font-medium truncate" id="detectedAddress">Click to detect location</span>
+    </div>
+  </section>
+
+  <!-- Trust Badges -->
+  <section class="max-w-7xl mx-auto px-4 pb-10">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-800/40 border border-slate-800 rounded-2xl p-4">
+      <div class="flex items-center gap-3">
+        <div class="text-2xl">🛡️</div>
+        <div>
+          <h4 class="text-xs font-bold text-white">100% Verified Heroes</h4>
+          <p class="text-[10px] text-slate-400">Background checked technicians</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-2xl">💵</div>
+        <div>
+          <h4 class="text-xs font-bold text-white">Upfront Transparent Pricing</h4>
+          <p class="text-[10px] text-slate-400">No hidden costs or extra charges</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-2xl">⚡</div>
+        <div>
+          <h4 class="text-xs font-bold text-white">30-Min Rapid Arrival</h4>
+          <p class="text-[10px] text-slate-400">Nearest TaskHero assigned</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-2xl">⭐</div>
+        <div>
+          <h4 class="text-xs font-bold text-white">4.8+ Rated Service</h4>
+          <p class="text-[10px] text-slate-400">Over 25,000+ happy customers</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Category Selection Grid -->
+  <section id="services" class="max-w-7xl mx-auto px-4 pb-4">
+    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+      <span>🛠️</span> Browse Categories
+    </h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-6">
+      <button onclick="filterCategory('all', this)" class="category-btn active-tab bg-amber-500 text-slate-950 font-bold text-xs p-3 rounded-xl text-center border border-amber-500 transition-all">
+        All Services
+      </button>
+      <button onclick="filterCategory('electrician', this)" class="category-btn bg-slate-800 text-slate-300 font-semibold text-xs p-3 rounded-xl text-center border border-slate-700 hover:border-amber-500/50 transition-all">
+        ⚡ Electrician
+      </button>
+      <button onclick="filterCategory('plumbing', this)" class="category-btn bg-slate-800 text-slate-300 font-semibold text-xs p-3 rounded-xl text-center border border-slate-700 hover:border-amber-500/50 transition-all">
+        🚰 Plumbing
+      </button>
+      <button onclick="filterCategory('cctv', this)" class="category-btn bg-slate-800 text-slate-300 font-semibold text-xs p-3 rounded-xl text-center border border-slate-700 hover:border-amber-500/50 transition-all">
+        📹 CCTV & Security
+      </button>
+      <button onclick="filterCategory('ac', this)" class="category-btn bg-slate-800 text-slate-300 font-semibold text-xs p-3 rounded-xl text-center border border-slate-700 hover:border-amber-500/50 transition-all">
+        ❄️ AC & Appliances
+      </button>
+      <button onclick="filterCategory('cleaning', this)" class="category-btn bg-slate-800 text-slate-300 font-semibold text-xs p-3 rounded-xl text-center border border-slate-700 hover:border-amber-500/50 transition-all">
+        🧹 Home Cleaning
+      </button>
+    </div>
+  </section>
+
+  <!-- Service Cards Grid -->
+  <section class="max-w-7xl mx-auto px-4 pb-16">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="servicesGrid">
+
+      <!-- Electrician Cards -->
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="electrician" data-title="Minimum Visit & Small Fixes">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">51% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 4.9 (1.2k)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">Minimum Visit & Small Fixes</h4>
+          <p class="text-slate-400 text-xs mt-1">Minor electrical repairs & general inspection</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹49</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹99</span>
+          </div>
+          <button onclick="openBookingModal('Minimum Visit & Small Fixes', 49)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="electrician" data-title="Switch Socket Replacement">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">51% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 4.8 (850)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">Switch / Socket Replacement</h4>
+          <p class="text-slate-400 text-xs mt-1">Electrical switch & main board repairs</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹49</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹99</span>
+          </div>
+          <button onclick="openBookingModal('Switch / Socket Replacement', 49)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="electrician" data-title="Ceiling Fan Light Repair">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">34% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 4.9 (2.1k)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">Ceiling Fan / Light Repair</h4>
+          <p class="text-slate-400 text-xs mt-1">Installation, rewiring & regulator fixes</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹99</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹149</span>
+          </div>
+          <button onclick="openBookingModal('Ceiling Fan / Light Repair', 99)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+      <!-- Plumbing Cards -->
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="plumbing" data-title="Tap Pipe Leakage Repair">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">40% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 4.7 (620)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">Tap / Pipe Leakage Repair</h4>
+          <p class="text-slate-400 text-xs mt-1">Plumbing fitting, valve & leak fixes</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹79</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹129</span>
+          </div>
+          <button onclick="openBookingModal('Tap / Pipe Leakage Repair', 79)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+      <!-- CCTV Cards -->
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="cctv" data-title="CCTV Checkup Repair">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">50% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 4.9 (430)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">CCTV Checkup & Repair</h4>
+          <p class="text-slate-400 text-xs mt-1">Camera setup & video signal troubleshooting</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹149</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹299</span>
+          </div>
+          <button onclick="openBookingModal('CCTV Checkup & Repair', 149)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="cctv" data-title="Full CCTV Setup 4 Cams">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">40% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 5.0 (310)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">Full CCTV Setup (4 Cams)</h4>
+          <p class="text-slate-400 text-xs mt-1">DVR configuration, mobile app sync & wiring</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹899</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹1499</span>
+          </div>
+          <button onclick="openBookingModal('Full CCTV Setup (4 Cams)', 899)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+      <!-- AC & Appliances -->
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="ac" data-title="AC Service Jet Clean">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">45% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 4.8 (1.8k)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">AC Service & Jet Clean</h4>
+          <p class="text-slate-400 text-xs mt-1">Deep foam jet wash, filter clean & gas check</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹399</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹719</span>
+          </div>
+          <button onclick="openBookingModal('AC Service & Jet Clean', 399)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+      <!-- Home Cleaning -->
+      <div class="service-card bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition-all" data-category="cleaning" data-title="Full Bathroom Deep Cleaning">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">35% OFF</span>
+            <span class="text-xs text-amber-400 font-bold">★ 4.8 (950)</span>
+          </div>
+          <h4 class="text-base font-bold mt-2">Bathroom Deep Cleaning</h4>
+          <p class="text-slate-400 text-xs mt-1">Tile degreasing, sanitization & fitting shine</p>
+        </div>
+        <div class="flex items-center justify-between mt-6">
+          <div>
+            <span class="text-xl font-bold text-amber-400">₹299</span>
+            <span class="text-xs text-slate-500 line-through ml-1">₹450</span>
+          </div>
+          <button onclick="openBookingModal('Bathroom Deep Cleaning', 299)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Add +
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Hero Partner Lead Generation Banner -->
+  <section class="max-w-7xl mx-auto px-4 pb-16">
+    <div class="bg-gradient-to-r from-amber-500/20 via-slate-800 to-slate-900 border border-amber-500/30 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+      <div>
+        <span class="text-xs font-bold bg-amber-500 text-slate-950 px-3 py-1 rounded-full uppercase tracking-wider">Become a Hero Partner</span>
+        <h3 class="text-2xl sm:text-3xl font-black text-white mt-3">Earn Up To ₹35,000/Month With TaskHero</h3>
+        <p class="text-slate-300 text-xs sm:text-sm mt-2 max-w-xl">
+          Are you a skilled technician, electrician, plumber or cleaner in Hyderabad? Join our platform, work on your own schedule, and get instant daily payouts.
+        </p>
+      </div>
+      <button onclick="alert('TaskHero Partner Onboarding: Call 1800-TASK-HERO or submit documents to partner@taskhero.in')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-3 rounded-2xl text-sm whitespace-nowrap transition-all shadow-lg shadow-amber-500/20">
+        Become a TaskHero →
+      </button>
+    </div>
+  </section>
+
+  <!-- Interactive Modal Booking & Checkout Flow -->
+  <div id="bookingModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      
+      <button onclick="closeBookingModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl font-bold">
+        ✕
+      </button>
+
+      <h3 class="text-xl font-black text-white mb-1">Confirm Service Booking</h3>
+      <p class="text-xs text-amber-400 font-bold mb-4" id="modalServiceTitle"></p>
+
+      <form id="bookingForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+        
+        <!-- Step 1: Customer Details -->
+        <div class="space-y-3">
+          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-1">1. Customer Information</h4>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">Full Name</label>
+            <input type="text" id="custName" required placeholder="e.g. Rahul Sharma" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">Phone Number</label>
+            <input type="tel" id="custPhone" required placeholder="9876543210" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+          </div>
+        </div>
+
+        <!-- Step 2: Address & Time Slot -->
+        <div class="space-y-3">
+          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-1">2. Address & Time Slot</h4>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">Locality / Area</label>
+            <input type="text" id="custArea" required placeholder="e.g. Hitech City, Hyderabad" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">Complete Address</label>
+            <textarea id="custAddress" required rows="2" placeholder="Flat No, House/Building Name, Street Details" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"></textarea>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">Preferred Time Slot</label>
+            <select id="custTimeSlot" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+              <option>Today - Instant Arrival (Within 30 mins)</option>
+              <option>Today - Evening Slot (5:00 PM - 8:00 PM)</option>
+              <option>Tomorrow - Morning Slot (9:00 AM - 12:00 PM)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 3: Price Breakdown -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-2">
+          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">3. Price Breakdown</h4>
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>Base Service Item Fee:</span>
+            <span id="priceBase">₹0</span>
+          </div>
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>Safety & Platform Charge:</span>
+            <span>₹29</span>
+          </div>
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>Taxes & Operational Costs:</span>
+            <span>₹15</span>
+          </div>
+          <div class="border-t border-slate-700 pt-2 flex justify-between text-sm font-bold text-amber-400">
+            <span>Total Payable (Pay After Job):</span>
+            <span id="priceTotal">₹0</span>
+          </div>
+        </div>
+
+        <button type="submit" id="submitBtn" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3 rounded-2xl text-sm transition-all shadow-lg shadow-amber-500/20">
+          Confirm Order & Book TaskHero
+        </button>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- Supabase Credentials & JS Script Logic -->
+  <script>
+    // Supabase JS Setup (Using your database URL and publishable key)
+    const SUPABASE_URL = 'https://jfmkranbxqvwzkgbevhh.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_8_bg-feg0S6m2GvV30E0ZQ_hpBWEeXU';
+
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let activeServiceTitle = '';
+    let activeServicePrice = 0;
+
+    function scrollToServices() {
+      document.getElementById('services').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Dynamic Category Filter
+    function filterCategory(cat, btn) {
+      const buttons = document.querySelectorAll('.category-btn');
+      buttons.forEach(b => {
+        b.classList.remove('bg-amber-500', 'text-slate-950', 'font-bold');
+        b.classList.add('bg-slate-800', 'text-slate-300');
+      });
+
+      btn.classList.remove('bg-slate-800', 'text-slate-300');
+      btn.classList.add('bg-amber-500', 'text-slate-950', 'font-bold');
+
+      const cards = document.querySelectorAll('.service-card');
+      cards.forEach(card => {
+        if (cat === 'all' || card.getAttribute('data-category') === cat) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    }
+
+    // Instant Search Bar Handler
+    function searchServices() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const cards = document.querySelectorAll('.service-card');
+
+      cards.forEach(card => {
+        const title = card.getAttribute('data-title').toLowerCase();
+        if (title.includes(query)) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    }
+
+    // GPS Auto Detection Mock
+    function detectGPSLocation() {
+      const el = document.getElementById('detectedAddress');
+      el.innerText = 'Detecting GPS location...';
+      setTimeout(() => {
+        el.innerText = '📍 Hitech City, Main Rd, Hyderabad (Auto-detected)';
+      }, 800);
+    }
+
+    // Open Modal with Detailed Price Breakdown
+    function openBookingModal(title, price) {
+      activeServiceTitle = title;
+      activeServicePrice = price;
+
+      document.getElementById('modalServiceTitle').innerText = title;
+      document.getElementById('priceBase').innerText = '₹' + price;
+      
+      const totalPrice = price + 29 + 15; // Base + Safety Fee + Taxes
+      document.getElementById('priceTotal').innerText = '₹' + totalPrice;
+
+      document.getElementById('bookingModal').classList.remove('hidden');
+    }
+
+    function closeBookingModal() {
+      document.getElementById('bookingModal').classList.add('hidden');
+    }
+
+    // Handle Form Submission to Supabase
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerText = 'Assigning Nearest TaskHero...';
+
+      const bookingCode = 'TH-' + Math.floor(100000 + Math.random() * 900000);
+      const name = document.getElementById('custName').value;
+      const phone = document.getElementById('custPhone').value;
+      const area = document.getElementById('custArea').value;
+      const address = document.getElementById('custAddress').value;
+      const timeSlot = document.getElementById('custTimeSlot').value;
+      const finalAmount = activeServicePrice + 29 + 15;
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('bookings')
+          .insert([
+            {
+              booking_code: bookingCode,
+              customer_name: name,
+              customer_phone: phone,
+              area: area,
+              address: address,
+              service_title: activeServiceTitle,
+              total_amount: finalAmount,
+              time_slot: timeSlot,
+              status: 'Hero En Route (ETA 8 mins)',
+              has_photo: false,
+              has_voice: false
+            }
+          ]);
+
+        if (error) throw error;
+
+        alert('🎉 Booking Confirmed!\n\nBooking ID: ' + bookingCode + '\nService: ' + activeServiceTitle + '\n\nOur TaskHero is on the way!');
+        closeBookingModal();
+        document.getElementById('bookingForm').reset();
+      } catch (err) {
+        console.error('Database Error:', err);
+        alert('Booking Failed: ' + (err.message || 'Please check connection'));
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Confirm Order & Book TaskHero';
+      }
+    }
+  </script>
+</body>
+</html>
