@@ -1,33 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Near Family — Admin Control Center</title>
-<script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root{--sage:#dcefe7;--sage2:#a9d8c8;--teal:#176b5b;--deep:#123c36;--cream:#f7fcfa;--muted:#638079}
+body{margin:0;background:var(--cream);color:var(--deep);font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+.soft{box-shadow:0 12px 35px rgba(23,107,91,.08)}
+.nav-active{background:#dcefe7;color:#176b5b;font-weight:800}
+</style>
 </head>
-<body class="bg-[#f4faf7] text-[#123c36] min-h-screen font-sans">
-<header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#dcefe7] px-5 py-4 flex justify-between items-center shadow-sm">
- <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-[#176b5b] text-white flex items-center justify-center font-black text-xl">♥</div><div><h1 class="text-xl font-black">Near <span class="text-[#176b5b]">Family</span> Control Center</h1><p class="text-[10px] text-[#638079] font-bold tracking-wider">CUSTOMER BOOKINGS & PARTNER DISPATCH</p></div></div>
- <button onclick="fetchBookings()" class="bg-[#176b5b] text-white font-bold px-4 py-2.5 rounded-xl text-xs">↻ Refresh Bookings</button>
+<body>
+<div class="min-h-screen">
+<header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#dcefe7]">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<div class="w-11 h-11 rounded-2xl bg-[#176b5b] text-white flex items-center justify-center text-xl">♥</div>
+<div><h1 class="font-black text-lg">Near <span class="text-[#176b5b]">Family</span></h1><p class="text-[10px] text-[#638079] font-bold tracking-wider">ADMIN CONTROL CENTER</p></div>
+</div>
+<div class="flex items-center gap-2">
+<span id="backendStatus" class="hidden sm:inline-flex items-center gap-2 text-[10px] font-bold px-3 py-2 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Backend not connected</span>
+<button onclick="refreshDashboard()" class="bg-[#176b5b] text-white font-bold px-4 py-2.5 rounded-xl text-xs"><i class="fa-solid fa-rotate-right mr-1"></i> Refresh</button>
+</div>
+</div>
 </header>
-<main class="max-w-7xl mx-auto px-4 py-7 space-y-7">
- <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-  <div class="bg-white border border-[#dcefe7] rounded-2xl p-5"><p class="text-slate-500 text-xs font-semibold">Total Bookings</p><h3 id="statTotal" class="text-3xl font-black mt-1">0</h3></div>
-  <div class="bg-white border border-[#dcefe7] rounded-2xl p-5"><p class="text-slate-500 text-xs font-semibold">Gross Revenue</p><h3 id="statRevenue" class="text-3xl font-black text-[#176b5b] mt-1">₹0</h3></div>
-  <div class="bg-white border border-[#dcefe7] rounded-2xl p-5"><p class="text-slate-500 text-xs font-semibold">Platform Cut (20%)</p><h3 id="statCommission" class="text-3xl font-black text-[#b98522] mt-1">₹0</h3></div>
-  <div class="bg-white border border-[#dcefe7] rounded-2xl p-5"><p class="text-slate-500 text-xs font-semibold">Active Assistance</p><h3 id="statActive" class="text-3xl font-black text-sky-600 mt-1">0</h3></div>
- </div>
- <section class="bg-white border border-[#dcefe7] rounded-3xl overflow-hidden">
-  <div class="p-5 border-b border-[#dcefe7] flex justify-between items-center"><h2 class="font-black">♥ Live Customer Bookings</h2><span class="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full font-bold">LIVE DATABASE</span></div>
-  <div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead class="bg-[#f4faf7] text-slate-500 uppercase text-[10px]"><tr><th class="p-4">Booking</th><th class="p-4">Customer</th><th class="p-4">Service</th><th class="p-4">Location</th><th class="p-4">Amount</th><th class="p-4">Status</th><th class="p-4">Action</th></tr></thead><tbody id="bookingsTableBody"><tr><td colspan="7" class="p-10 text-center text-slate-500">Loading Near Family bookings...</td></tr></tbody></table></div>
- </section>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 grid lg:grid-cols-[220px_1fr] gap-6">
+<aside class="bg-white border border-[#dcefe7] rounded-3xl p-3 h-fit soft">
+<button class="nav-active w-full text-left px-4 py-3 rounded-xl text-sm mb-1" onclick="showSection('dashboard',this)"><i class="fa-solid fa-chart-line w-5"></i> Dashboard</button>
+<button class="w-full text-left px-4 py-3 rounded-xl text-sm mb-1" onclick="showSection('bookings',this)"><i class="fa-solid fa-calendar-check w-5"></i> Bookings</button>
+<button class="w-full text-left px-4 py-3 rounded-xl text-sm mb-1" onclick="showSection('customers',this)"><i class="fa-solid fa-users w-5"></i> Customers</button>
+<button class="w-full text-left px-4 py-3 rounded-xl text-sm mb-1" onclick="showSection('families',this)"><i class="fa-solid fa-people-group w-5"></i> Families</button>
+<button class="w-full text-left px-4 py-3 rounded-xl text-sm mb-1" onclick="showSection('partners',this)"><i class="fa-solid fa-user-shield w-5"></i> Partners</button>
+<button class="w-full text-left px-4 py-3 rounded-xl text-sm mb-1" onclick="showSection('services',this)"><i class="fa-solid fa-screwdriver-wrench w-5"></i> Services</button>
+<button class="w-full text-left px-4 py-3 rounded-xl text-sm mb-1" onclick="showSection('support',this)"><i class="fa-solid fa-headset w-5"></i> Support</button>
+</aside>
+
+<main>
+<section id="dashboard" class="section">
+<div class="mb-6"><h2 class="text-2xl font-black">Good to see you, Admin 👋</h2><p class="text-sm text-[#638079] mt-1">Manage Near Family operations from one place.</p></div>
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+<div class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><div class="w-10 h-10 rounded-xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center"><i class="fa-solid fa-calendar-check"></i></div><p class="text-xs text-slate-500 mt-4">Total Bookings</p><h3 id="statBookings" class="text-3xl font-black mt-1">0</h3></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><div class="w-10 h-10 rounded-xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center"><i class="fa-solid fa-bolt"></i></div><p class="text-xs text-slate-500 mt-4">Active Requests</p><h3 id="statActive" class="text-3xl font-black mt-1">0</h3></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><div class="w-10 h-10 rounded-xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center"><i class="fa-solid fa-users"></i></div><p class="text-xs text-slate-500 mt-4">Customers</p><h3 id="statCustomers" class="text-3xl font-black mt-1">0</h3></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><div class="w-10 h-10 rounded-xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center"><i class="fa-solid fa-user-shield"></i></div><p class="text-xs text-slate-500 mt-4">Partners</p><h3 id="statPartners" class="text-3xl font-black mt-1">0</h3></div>
+</div>
+<div class="grid xl:grid-cols-2 gap-5 mt-6">
+<div class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><div class="flex justify-between items-center"><h3 class="font-black">Booking Pipeline</h3><span class="text-[10px] text-[#638079]">Firebase-ready</span></div><div class="grid grid-cols-2 gap-3 mt-4"><div class="rounded-2xl bg-[#f7fcfa] p-4"><p class="text-xs text-slate-500">Confirmed</p><b id="statConfirmed" class="text-2xl">0</b></div><div class="rounded-2xl bg-[#f7fcfa] p-4"><p class="text-xs text-slate-500">Completed</p><b id="statCompleted" class="text-2xl">0</b></div></div></div>
+<div class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><h3 class="font-black">Operations checklist</h3><div class="mt-3 space-y-2 text-xs"><p>✓ Near Family branding foundation</p><p>✓ Customer booking flow foundation</p><p>○ Firebase Auth / Firestore connection</p><p>○ Partner matching & dispatch</p><p>○ Notifications & live status</p></div></div>
+</div>
+</section>
+
+<section id="bookings" class="section hidden"><div class="mb-5"><h2 class="text-2xl font-black">Bookings</h2><p class="text-sm text-[#638079]">Customer requests, assignment and status flow.</p></div><div class="bg-white border border-[#dcefe7] rounded-3xl overflow-hidden"><div class="p-5 border-b border-[#dcefe7]"><input id="bookingSearch" oninput="renderBookings()" placeholder="Search booking, customer or service..." class="w-full border border-[#cfe3dc] rounded-2xl px-4 py-3 text-sm outline-none focus:border-[#176b5b]"></div><div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead class="bg-[#f7fcfa] text-slate-500 uppercase text-[10px]"><tr><th class="p-4">Booking</th><th class="p-4">Customer</th><th class="p-4">Service</th><th class="p-4">For</th><th class="p-4">Status</th></tr></thead><tbody id="bookingsBody"><tr><td colspan="5" class="p-10 text-center text-slate-500">Firebase connection required to load live bookings.</td></tr></tbody></table></div></div></section>
+
+<section id="customers" class="section hidden"><div class="mb-5"><h2 class="text-2xl font-black">Customers</h2><p class="text-sm text-[#638079]">Customer accounts, contact details and activity.</p></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-8 text-center soft"><div class="w-14 h-14 rounded-2xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-users"></i></div><h3 class="font-black mt-4">Module foundation ready</h3><p class="text-xs text-slate-500 mt-2 max-w-md mx-auto">The UI is prepared. Live data will be connected through the central Firebase backend once the project configuration is added.</p></div></section><section id="families" class="section hidden"><div class="mb-5"><h2 class="text-2xl font-black">Family Profiles</h2><p class="text-sm text-[#638079]">People customers have added under Help for My Family.</p></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-8 text-center soft"><div class="w-14 h-14 rounded-2xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-people-group"></i></div><h3 class="font-black mt-4">Module foundation ready</h3><p class="text-xs text-slate-500 mt-2 max-w-md mx-auto">The UI is prepared. Live data will be connected through the central Firebase backend once the project configuration is added.</p></div></section><section id="partners" class="section hidden"><div class="mb-5"><h2 class="text-2xl font-black">Partners</h2><p class="text-sm text-[#638079]">Partner onboarding, KYC, skills, service areas and availability.</p></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-8 text-center soft"><div class="w-14 h-14 rounded-2xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-user-shield"></i></div><h3 class="font-black mt-4">Module foundation ready</h3><p class="text-xs text-slate-500 mt-2 max-w-md mx-auto">The UI is prepared. Live data will be connected through the central Firebase backend once the project configuration is added.</p></div></section><section id="services" class="section hidden"><div class="mb-5"><h2 class="text-2xl font-black">Services</h2><p class="text-sm text-[#638079]">Service catalogue, categories, pricing and availability.</p></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-8 text-center soft"><div class="w-14 h-14 rounded-2xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-screwdriver-wrench"></i></div><h3 class="font-black mt-4">Module foundation ready</h3><p class="text-xs text-slate-500 mt-2 max-w-md mx-auto">The UI is prepared. Live data will be connected through the central Firebase backend once the project configuration is added.</p></div></section><section id="support" class="section hidden"><div class="mb-5"><h2 class="text-2xl font-black">Support</h2><p class="text-sm text-[#638079]">Customer issues, booking support and operational follow-up.</p></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-8 text-center soft"><div class="w-14 h-14 rounded-2xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-headset"></i></div><h3 class="font-black mt-4">Module foundation ready</h3><p class="text-xs text-slate-500 mt-2 max-w-md mx-auto">The UI is prepared. Live data will be connected through the central Firebase backend once the project configuration is added.</p></div></section>
 </main>
+</div>
+</div>
+
 <script>
-const SUPABASE_URL='https://jfmkranbxqvwzkgbevhh.supabase.co';const SUPABASE_KEY='sb_publishable_8_bg-feg0S6m2GvV30E0ZQ_hpBWEeXU';const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-async function fetchBookings(){const tbody=document.getElementById('bookingsTableBody');tbody.innerHTML='<tr><td colspan="7" class="p-10 text-center text-slate-500">Fetching latest bookings...</td></tr>';try{const {data,error}=await supabaseClient.from('bookings').select('*').order('id',{ascending:false});if(error)throw error;if(!data?.length){tbody.innerHTML='<tr><td colspan="7" class="p-10 text-center text-slate-500">No bookings found yet.</td></tr>';updateStats([]);return}updateStats(data);tbody.innerHTML='';data.forEach(order=>{const service=order.service_title||order.service_name||'Near Family Assistance';const amount=order.total_amount??order.amount??0;const phone=order.customer_phone||order.phone||'';const row=document.createElement('tr');row.className='border-t border-[#edf5f1] hover:bg-[#f7fcfa]';row.innerHTML=`<td class="p-4 font-mono font-bold text-[#176b5b]">${order.booking_code||('NF-'+order.id)}</td><td class="p-4"><div class="font-bold">${order.customer_name||'N/A'}</div><div class="text-[11px] text-slate-400">${phone}</div></td><td class="p-4 font-medium">${service}</td><td class="p-4"><div class="font-semibold">${order.area||''}</div><div class="text-[10px] text-slate-500 max-w-[180px] truncate">${order.address||''}</div></td><td class="p-4 font-black text-[#176b5b]">₹${amount}</td><td class="p-4"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusStyle(order.status)}">${order.status||'Pending'}</span></td><td class="p-4"><select onchange="updateOrderStatus('${order.id}',this.value)" class="bg-white border border-[#cfe3dc] text-[11px] rounded-lg px-2 py-1"><option value="">Update...</option><option>Partner Assigned</option><option>Partner En Route</option><option>Arrived</option><option>Service Started</option><option>Completed</option><option>Cancelled</option></select></td>`;tbody.appendChild(row)})}catch(e){console.error(e);tbody.innerHTML='<tr><td colspan="7" class="p-10 text-center text-red-500">Could not load bookings. Check Supabase RLS/schema.</td></tr>'}}
-function getStatusStyle(s){if(!s)return'bg-slate-50 text-slate-500 border-slate-200';if(s==='Completed')return'bg-emerald-50 text-emerald-700 border-emerald-200';if(s==='Cancelled')return'bg-red-50 text-red-600 border-red-200';if(s.includes('En Route')||s.includes('Started')||s==='Arrived')return'bg-amber-50 text-amber-700 border-amber-200';return'bg-sky-50 text-sky-700 border-sky-200'}
-function updateStats(data){const total=data.length,revenue=data.reduce((a,x)=>a+Number(x.total_amount??x.amount??0),0),active=data.filter(x=>x.status&&!['Completed','Cancelled'].includes(x.status)).length;document.getElementById('statTotal').innerText=total;document.getElementById('statRevenue').innerText='₹'+revenue;document.getElementById('statCommission').innerText='₹'+Math.round(revenue*.2);document.getElementById('statActive').innerText=active}
-async function updateOrderStatus(id,status){if(!status)return;try{const {error}=await supabaseClient.from('bookings').update({status}).eq('id',id);if(error)throw error;fetchBookings()}catch(e){alert('Update failed: '+e.message)}}
-fetchBookings();
+const demoBookings=[];
+function showSection(id,btn){document.querySelectorAll('.section').forEach(s=>s.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('aside button').forEach(b=>b.classList.remove('nav-active'));btn.classList.add('nav-active');if(id==='bookings')renderBookings()}
+function renderBookings(){const q=(document.getElementById('bookingSearch')?.value||'').toLowerCase();const rows=demoBookings.filter(b=>!q||JSON.stringify(b).toLowerCase().includes(q));const body=document.getElementById('bookingsBody');if(!rows.length){body.innerHTML='<tr><td colspan="5" class="p-10 text-center text-slate-500">No live bookings yet. Connect Firebase to load customer requests.</td></tr>';return}body.innerHTML=rows.map(b=>'<tr class="border-t border-[#edf5f1]"><td class="p-4 font-mono font-bold">'+b.id+'</td><td class="p-4">'+b.customer+'</td><td class="p-4">'+b.service+'</td><td class="p-4">'+b.for+'</td><td class="p-4">'+b.status+'</td></tr>').join('')}
+function refreshDashboard(){document.getElementById('backendStatus').innerHTML='<span class="w-2 h-2 rounded-full bg-amber-400"></span> Backend not connected';toast('Dashboard refreshed — Firebase is not connected yet.')}
+function toast(t){const x=document.createElement('div');x.textContent=t;x.className='fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#123c36] text-white px-5 py-3 rounded-2xl text-xs shadow-xl z-50';document.body.appendChild(x);setTimeout(()=>x.remove(),2500)}
 </script>
-</body></html>
+</body>
+</html>
