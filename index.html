@@ -104,4 +104,13 @@ function openSupport(){alert('Near Family Support\n\nFor booking help, please co
 function requestLocation(){if(!navigator.geolocation)return $('locationText').textContent='Add location manually';navigator.geolocation.getCurrentPosition(()=>{$('locationText').textContent='Current location detected'},()=>{$('locationText').textContent='Location unavailable'})}
 function renderAll(){renderCategories();renderServices();renderBookings();renderFamilyPage();let n=state.bookings.filter(b=>b.status!=='Completed').length;$('bookingBadge').classList.toggle('hide',!n);if(n)$('bookingBadge').textContent=n}
 window.addEventListener('load',()=>{setTimeout(()=>{$('splash').style.display='none';if(state.user)startApp();else $('auth').classList.add('active')},1600);if(!state.user)$('auth').classList.remove('active')});
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="backend.js"></script>
+<script>
+window.addEventListener('load',async()=>{try{await window.NearFamilyBackend.init();window.dispatchEvent(new CustomEvent('near-family-backend',{detail:{ready:window.NearFamilyBackend.ready}}));}catch(e){console.warn('Near Family backend is not configured yet.',e);}});
 </script></body></html>
