@@ -121,7 +121,15 @@ async function signup(){
   startApp();
 }
 function startApp(){$('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');$('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';$('profileName').textContent=state.user?.name||'Customer';$('profilePhone').textContent=state.user?.phone||'';renderAll();requestLocation()}
-function logout(){state.user=null;save();$('app').classList.remove('active');$('auth').classList.add('active');toggleAuth(false);toast('Logged out')}
+async function logout(){
+  if(state.unsubscribeBookings){state.unsubscribeBookings();state.unsubscribeBookings=null}
+  if(window.NearFamilyBackend?.ready){
+    try{await NearFamilyBackend.signOut()}catch(e){console.warn('Firebase sign-out failed',e)}
+  }
+  state.user=null;save();
+  $('app').classList.remove('active');$('auth').classList.add('active');toggleAuth(false);
+  toast('Logged out');
+}
 function go(page){['home','bookings','family','profile'].forEach(x=>{let p=$(x+'Page');if(p)p.classList.toggle('hide',x!==page)});$('homePage').classList.toggle('hide',page!=='home');document.querySelectorAll('.nav').forEach((n,i)=>n.classList.remove('text-[#176b5b]','font-bold'));renderAll();window.scrollTo(0,0)}
 function focusSearch(){go('home');setTimeout(()=>$('search').focus(),100)}
 function renderCategories(){ $('categories').innerHTML=CATS.map(x=>`<button onclick="setCategory('${x[0]}')" class="bg-white border border-[#dcefe7] rounded-2xl p-4 text-left soft hover:-translate-y-0.5 transition"><div class="w-9 h-9 rounded-xl bg-[#dcefe7] flex items-center justify-center text-[#176b5b]">${x[1]}</div><b class="block text-xs mt-3">${x[0]}</b></button>`).join('') }
