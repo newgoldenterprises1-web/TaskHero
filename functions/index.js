@@ -2,6 +2,7 @@ const {onCall}=require("firebase-functions/v2/https");
 const {onDocumentCreated,onDocumentUpdated}=require("firebase-functions/v2/firestore");
 const {initializeApp}=require("firebase-admin/app");
 const {getFirestore,FieldValue}=require("firebase-admin/firestore");
+const {Timestamp}=require("firebase-admin/firestore");
 const {getMessaging}=require("firebase-admin/messaging");
 
 initializeApp();
@@ -44,13 +45,114 @@ async function rateLimit(uid,action){
   }
 }
 
+function securitySeverity(type){
+  if(["rate_limit_blocked","booking_rejected","booking_cancellation_requested"].includes(type)) return "medium";
+  if(["security_check"].includes(type)) return "low";
+  if(["booking_status_changed","booking_accepted","booking_created","support_ticket_created"].includes(type)) return "info";
+  return "high";
+}
+
 async function auditSecurityEvent(event){
   try{
     await db.collection("securityEvents").add({
       ...event,
+      severity:event.severity||securitySeverity(event.type),
       createdAt:FieldValue.serverTimestamp()
     });
   }catch(err){console.error("Security audit write failed",err);}
+}
+
+async function createSecurityAlert({type,severity="high",uid=null,reason,sourceEventId=null,metadata={}}){
+  try{
+    const bucket=Math.floor(Date.now()/15/60/1000);
+    const id=[type,uid||"system",bucket].join("_").replace(/[^A-Za-z0-9_-]/g,"_");
+    await db.collection("securityAlerts").doc(id).set({
+      type,severity,uid,reason:String(reason||"Suspicious security activity").slice(0,500),
+      sourceEventId:sourceEventId||null,metadata,status:"open",
+      createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()
+    },{merge:true});
+  }catch(err){console.error("Security alert write failed",err);}
+}
+
+exports.onSecurityEventCreated=onDocumentCreated("securityEvents/{eventId}",async(event)=>{
+  const data=event.data?.data()||{};
+  const uid=data.uid||null;
+  if(!uid)return;
+  const now=Date.now();
+  const since15=Timestamp.fromMillis(now-15*60*1000);
+  const sinceHour=Timestamp.fromMillis(now-60*60*1000);
+  const recent=await db.collection("securityEvents")
+    .where("uid","==",uid)
+    .where("createdAt",">=",sinceHour)
+    .orderBy("createdAt","desc")
+    .limit(100).get();
+  const events=recent.docs.map(d=>d.data()||{});
+  const recent15=events.filter(e=>e.createdAt?.toMillis && e.createdAt.toMillis()>=since15.toMillis());
+
+  const rateBlocks15=recent15.filter(e=>e.type==="rate_limit_blocked").length;
+  if(rateBlocks15>=3){
+    await createSecurityAlert({
+      type:"repeated_rate_limit_blocks",severity:"high",uid,
+      reason:"Repeated rate-limit blocks detected within 15 minutes.",
+      sourceEventId:event.params.eventId,
+      metadata:{count:rateBlocks15,windowMinutes:15}
+    });
+  }
+
+  const cancellationsHour=events.filter(e=>e.type==="booking_cancellation_requested").length;
+  if(cancellationsHour>=5){
+    await createSecurityAlert({
+      type:"cancellation_abuse_signal",severity:"medium",uid,
+      reason:"Multiple booking cancellation requests detected within one hour.",
+      sourceEventId:event.params.eventId,
+      metadata:{count:cancellationsHour,windowMinutes:60}
+    });
+  }
+
+  const rejectsHour=events.filter(e=>e.type==="booking_rejected").length;
+  if(rejectsHour>=8){
+    await createSecurityAlert({
+      type:"partner_rejection_spike",severity:"medium",uid,
+      reason:"A high number of partner booking rejections was detected within one hour.",
+      sourceEventId:event.params.eventId,
+      metadata:{count:rejectsHour,windowMinutes:60}
+    });
+  }
+});
+
+function requireAdmin(request){
+  if(!request.auth) throw new Error("Authentication required");
+  if(request.auth.token?.admin!==true) throw new Error("Admin access required");
+  return request.auth.uid;
+}
+
+exports.listSecurityAlerts=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const adminUid=requireAdmin(request);
+  const limitCount=Math.min(100,Math.max(1,Number(request.data?.limit||50)));
+  const snap=await db.collection("securityAlerts").orderBy("createdAt","desc").limit(limitCount).get();
+  return {
+    adminUid,
+    alerts:snap.docs.map(d=>({id:d.id,...d.data()}))
+  };
+});
+
+exports.resolveSecurityAlert=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const adminUid=requireAdmin(request);
+  const alertId=String(request.data?.alertId||"");
+  if(!alertId||alertId.length>150) throw new Error("Invalid alertId");
+  const note=String(request.data?.note||"").trim().slice(0,1000);
+  const ref=db.collection("securityAlerts").doc(alertId);
+  const snap=await ref.get();
+  if(!snap.exists) throw new Error("Security alert not found");
+  await ref.update({
+    status:"resolved",
+    resolvedBy:adminUid,
+    resolutionNote:note,
+    resolvedAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp()
+  });
+  await auditSecurityEvent({type:"security_alert_resolved",uid:adminUid,alertId});
+  return {ok:true,status:"resolved"};
 }
 
 const ACTIVE_STATUSES=new Set(["requested","partner_assigned","partner_on_the_way","service_started"]);
