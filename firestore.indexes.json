@@ -7,6 +7,14 @@
         {"fieldPath":"customerId","order":"ASCENDING"},
         {"fieldPath":"createdAt","order":"DESCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath":"partnerId","order":"ASCENDING"},
+        {"fieldPath":"createdAt","order":"DESCENDING"}
+      ]
     }
   ],
   "fieldOverrides": []
