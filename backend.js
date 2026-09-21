@@ -2,12 +2,27 @@
 (function(){
   const cfg=window.NEAR_FAMILY_FIREBASE_CONFIG;
   const B=window.NearFamilyBackend={
-    ready:false,firebase:null,auth:null,db:null,storage:null,
+    ready:false,firebase:null,auth:null,db:null,storage:null,phoneVerifier:null,phoneConfirmation:null,
     async init(){
       if(!cfg?.projectId||cfg.projectId.startsWith("REPLACE_")||!window.firebase)return false;
       if(!firebase.apps.length)firebase.initializeApp(cfg);
       this.firebase=firebase;this.auth=firebase.auth();this.db=firebase.firestore();this.storage=firebase.storage();
       this.ready=true;return true;
+    },
+    async startPhoneVerification(phone,containerId){
+      if(!this.ready||!this.auth)return null;
+      if(!phone)return null;
+      if(!this.phoneVerifier){
+        this.phoneVerifier=new this.firebase.auth.RecaptchaVerifier(containerId,{size:"invisible"});
+      }
+      this.phoneConfirmation=await this.auth.signInWithPhoneNumber(phone,this.phoneVerifier);
+      return true;
+    },
+    async confirmPhoneCode(code){
+      if(!this.phoneConfirmation||!code)return null;
+      const result=await this.phoneConfirmation.confirm(code);
+      this.phoneConfirmation=null;
+      return result?.user||null;
     },
     async signIn(){
       if(!this.ready)return null;
