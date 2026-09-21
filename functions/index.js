@@ -147,7 +147,7 @@ exports.updateJobStatus=onCall(async(request)=>{
   const patch={status:next,updatedAt:FieldValue.serverTimestamp()};
   if(next==="partner_on_the_way")patch.onTheWayAt=FieldValue.serverTimestamp();
   if(next==="service_started")patch.serviceStartedAt=FieldValue.serverTimestamp();
-  if(next==="completed")patch.completedAt=FieldValue.serverTimestamp();
+  if(next==="completed"){\n    if(!request.data?.proofUrl) throw new Error("Completion proof is required");\n    patch.completedAt=FieldValue.serverTimestamp();\n    patch.completionProofUrl=String(request.data.proofUrl);\n    patch.completionNotes=String(request.data.notes||"");\n  }
   if(next==="cancelled")patch.cancelledAt=FieldValue.serverTimestamp();
   await ref.update(patch);
   return {ok:true,status:next};
