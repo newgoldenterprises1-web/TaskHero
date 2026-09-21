@@ -62,12 +62,13 @@ exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
   await rateLimit(request.auth.uid,"create");
   const data=request.data||{};
+  if(data===null || typeof data!=="object" || Array.isArray(data)) throw new Error("Invalid booking payload");
   const allowed=["service","category","price","name","phone","for","forWho","familyMemberId","address","date","time","instructions","photos","location"];
   const keys=Object.keys(data);
   if(keys.some(k=>!allowed.includes(k))) throw new Error("Invalid booking fields");
-  const service=String(data.service||"").trim();
-  const category=String(data.category||"").trim();
-  const name=String(data.name||"").trim();
+  const service=assertText(data.service,160,"Service");
+  const category=assertText(data.category,120,"Category");
+  const name=assertText(data.name,120,"Name");
   const phone=String(data.phone||"").trim();
   const address=String(data.address||"").trim();
   const date=String(data.date||"").trim();
@@ -75,7 +76,8 @@ exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!service||!category||!name||phone.length<10||!address||!date||!time) throw new Error("Required booking details are missing");
   if(service.length>160||category.length>120||name.length>120||phone.length>30||address.length>1000||date.length>40||time.length>80) throw new Error("Booking field is too long");
   const price=Number(data.price);
-  if(!Number.isFinite(price)||price<0||price>1000000) throw new Error("Invalid booking price");
+  if(!Number.isFinite(price)||!Number.isInteger(Math.round(price*100))||price<0||price>1000000) throw new Error("Invalid booking price");
+  if(Math.round(price*100)!==price*100) throw new Error("Price must use at most 2 decimal places");
   if(data.photos!==undefined && !Array.isArray(data.photos)) throw new Error("Invalid booking photos");
   if(Array.isArray(data.photos) && data.photos.length>5) throw new Error("Too many booking photos");
   if(data.location!==null && data.location!==undefined){
@@ -99,6 +101,28 @@ exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   const ref=await db.collection("bookings").add(payload);
   await auditSecurityEvent({type:"booking_created",uid:request.auth.uid,bookingId:ref.id});
   return {id:ref.id,status:"requested"};
+});
+
+function assertText(value,max,name){
+  const v=String(value??"").trim();
+  if(v.length>max) throw new Error(name+" is too long");
+  return v;
+}
+async function recordAuthRisk(uid,type,details={}){
+  await auditSecurityEvent({type,uid,...details});
+}
+
+exports.securityCheck=onCall(CALLABLE_OPTIONS,async(request)=>{
+  if(!request.auth) throw new Error("Authentication required");
+  const token=request.auth.token||{};
+  await auditSecurityEvent({
+    type:"security_check",
+    uid:request.auth.uid,
+    authProvider:token.firebase?.sign_in_provider||"unknown",
+    emailVerified:token.email_verified===true,
+    appCheckVerified:request.app?.appId?true:false
+  });
+  return {ok:true,authenticated:true,appCheckVerified:request.app?.appId?true:false};
 });
 
 exports.createSupportTicket=onCall(CALLABLE_OPTIONS,async(request)=>{
