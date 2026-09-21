@@ -12,6 +12,7 @@ const CALLABLE_OPTIONS={
 };
 
 const RATE_WINDOWS={
+  create:{max:20,windowMs:10*60*1000},
   support:{max:5,windowMs:10*60*1000},
   accept:{max:30,windowMs:10*60*1000},
   reject:{max:30,windowMs:10*60*1000},
@@ -56,6 +57,7 @@ exports.health=onCall(CALLABLE_OPTIONS,()=>({ok:true,service:"near-family-functi
 
 exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
+  await rateLimit(request.auth.uid,"create");
   const data=request.data||{};
   const allowed=["service","category","price","name","phone","for","forWho","familyMemberId","address","date","time","instructions","photos","location"];
   const keys=Object.keys(data);
@@ -245,10 +247,12 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(next==="service_started")patch.serviceStartedAt=FieldValue.serverTimestamp();
     if(next==="completed"){
       const proofUrl=String(request.data?.proofUrl||"");
-      if(!proofUrl || !(proofUrl.startsWith("https://firebasestorage.googleapis.com/") || proofUrl.startsWith("https://firebasestorage.app/"))) throw new Error("Completion proof must come from Firebase Storage");
+      const encodedPrefix="/o/bookings%2F"+encodeURIComponent(bookingId)+"%2Fcompletion%2F";
+      const rawPrefix="/o/bookings/"+bookingId+"/completion/";
+      if(!proofUrl || !(proofUrl.startsWith("https://firebasestorage.googleapis.com/") || proofUrl.startsWith("https://firebasestorage.app/")) || !(proofUrl.includes(encodedPrefix)||proofUrl.includes(rawPrefix))) throw new Error("Completion proof must be a Firebase Storage file for this booking");
       patch.completedAt=FieldValue.serverTimestamp();
-      patch.completionProofUrl=String(request.data.proofUrl);
-      patch.completionNotes=String(request.data.notes||"");
+      patch.completionProofUrl=proofUrl;
+      patch.completionNotes=String(request.data?.notes||"").slice(0,4000);
     }
     if(next==="cancelled")patch.cancelledAt=FieldValue.serverTimestamp();
     tx.update(ref,patch);
