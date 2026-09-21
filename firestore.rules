@@ -99,6 +99,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Security alerts are backend/admin-callable only. No direct client access.
+    match /securityAlerts/{id} {
+      allow read, write: if false;
+    }
+
     match /supportTickets/{id} {
       allow create: if signedIn()
         && request.resource.data.customerId == request.auth.uid
