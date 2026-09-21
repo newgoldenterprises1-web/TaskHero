@@ -10,10 +10,25 @@ service firebase.storage {
     function bookingCustomer(id){ return signedIn() && booking(id).customerId == request.auth.uid; }
     function bookingPartner(id){ return signedIn() && booking(id).partnerId == request.auth.uid; }
 
+    match /users/{uid}/bookings/{bookingId}/{allPaths=**} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*')
+        && bookingCustomer(bookingId);
+    }
+
     match /users/{uid}/{allPaths=**} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow write: if signedIn() && request.auth.uid == uid
         && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    match /bookings/{bookingId}/completion/{allPaths=**} {
+      allow read: if admin() || bookingCustomer(bookingId) || bookingPartner(bookingId);
+      allow write: if bookingPartner(bookingId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
 
     match /bookings/{bookingId}/{allPaths=**} {
