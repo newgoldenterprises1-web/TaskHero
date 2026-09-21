@@ -51,14 +51,8 @@ service cloud.firestore {
     }
 
     match /bookings/{id} {
-      allow create: if signedIn()
-        && request.resource.data.customerId == request.auth.uid
-        && request.resource.data.status == "requested"
-        && request.resource.data.keys().hasOnly([
-          "service","category","price","name","phone","for","forWho",
-          "familyMemberId","address","date","time","instructions","photos",
-          "location","customerId","status","createdAt","updatedAt"
-        ]);
+      // Booking creation and lifecycle changes are server-authoritative Cloud Functions.
+      allow create: if false;
 
       allow read: if admin() || (signedIn() && (
         resource.data.customerId == request.auth.uid ||
@@ -70,6 +64,7 @@ service cloud.firestore {
           && resource.data.customerId == request.auth.uid
           && request.resource.data.customerId == resource.data.customerId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["photos","updatedAt"]));
+
       allow delete: if admin();
     }
 
