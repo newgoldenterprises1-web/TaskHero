@@ -54,6 +54,48 @@ const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_"
 
 exports.health=onCall(CALLABLE_OPTIONS,()=>({ok:true,service:"near-family-functions"}));
 
+exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
+  if(!request.auth) throw new Error("Authentication required");
+  const data=request.data||{};
+  const allowed=["service","category","price","name","phone","for","forWho","familyMemberId","address","date","time","instructions","photos","location"];
+  const keys=Object.keys(data);
+  if(keys.some(k=>!allowed.includes(k))) throw new Error("Invalid booking fields");
+  const service=String(data.service||"").trim();
+  const category=String(data.category||"").trim();
+  const name=String(data.name||"").trim();
+  const phone=String(data.phone||"").trim();
+  const address=String(data.address||"").trim();
+  const date=String(data.date||"").trim();
+  const time=String(data.time||"").trim();
+  if(!service||!category||!name||phone.length<10||!address||!date||!time) throw new Error("Required booking details are missing");
+  if(service.length>160||category.length>120||name.length>120||phone.length>30||address.length>1000||date.length>40||time.length>80) throw new Error("Booking field is too long");
+  const price=Number(data.price);
+  if(!Number.isFinite(price)||price<0||price>1000000) throw new Error("Invalid booking price");
+  if(data.photos!==undefined && !Array.isArray(data.photos)) throw new Error("Invalid booking photos");
+  if(Array.isArray(data.photos) && data.photos.length>5) throw new Error("Too many booking photos");
+  if(data.location!==null && data.location!==undefined){
+    const lat=Number(data.location.lat),lng=Number(data.location.lng);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180) throw new Error("Invalid booking location");
+  }
+  const payload={
+    service,category,price,name,phone,
+    for:String(data.for||"Me").slice(0,160),
+    forWho:String(data.forWho||"Me").slice(0,40),
+    familyMemberId:data.familyMemberId?String(data.familyMemberId).slice(0,128):null,
+    address,date,time,
+    instructions:String(data.instructions||"").slice(0,4000),
+    photos:Array.isArray(data.photos)?data.photos.slice(0,5):[],
+    location:data.location||null,
+    customerId:request.auth.uid,
+    status:"requested",
+    createdAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp()
+  };
+  const ref=await db.collection("bookings").add(payload);
+  await auditSecurityEvent({type:"booking_created",uid:request.auth.uid,bookingId:ref.id});
+  return {id:ref.id,status:"requested"};
+});
+
 exports.createSupportTicket=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
   await rateLimit(request.auth.uid,"support");
