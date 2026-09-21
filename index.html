@@ -56,7 +56,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
 <script src="firebase-config.js"></script><script src="backend.js"></script>
 <script>
 const CATS=[['Family Assistance','♥'],['Home Services','⌂'],['Health & Hospital','✚'],['Pickups & Errands','▣'],['Repairs & Maintenance','⚒'],['Events & Special Help','★']];
@@ -109,8 +109,22 @@ function openSupport(){const subject=encodeURIComponent('Near Family Support Req
 async function requestBookingCancellation(id){const b=state.bookings.find(x=>x.id===id);if(!b||['completed','cancelled','cancellation_requested'].includes(b.status))return;if(!confirm('Request cancellation for this booking?'))return;if(window.NearFamilyBackend?.ready){try{await NearFamilyBackend.requestBookingCancellation(id);b.status='cancellation_requested';b.cancellationRequestedAt=new Date().toISOString();b.updatedAt=new Date().toISOString();save();renderAll();toast('Cancellation request submitted')}catch(e){console.warn(e);toast('Cancellation request could not be submitted')}}else{b.status='cancellation_requested';b.cancellationRequestedAt=new Date().toISOString();b.updatedAt=new Date().toISOString();save();renderAll();toast('Cancellation request saved locally')}}\nfunction rebookBooking(id){const b=state.bookings.find(x=>x.id===id);if(!b)return;state.booking={...b,id:null,status:'draft',createdAt:null,updatedAt:null};state.currentScreen='booking';renderAll()}\nfunction requestLocation(){if(!navigator.geolocation)return manualLocation();navigator.geolocation.getCurrentPosition(pos=>{state.location.lat=pos.coords.latitude;state.location.lng=pos.coords.longitude;state.location.label='Current location';$('locationText').textContent='Current location detected';save()},()=>manualLocation(),{enableHighAccuracy:true,timeout:9000,maximumAge:300000})}
 function manualLocation(){let value=prompt('Location permission is unavailable. Enter your city/locality or full address:','');if(value&&value.trim()){state.location.label=value.trim();state.location.lat=null;state.location.lng=null;$('locationText').textContent=value.trim();save();toast('Location saved')}}
 function renderAll(){renderCategories();renderServices();renderBookings();renderFamilyPage();let n=state.bookings.filter(b=>b.status!=='Completed').length;$('bookingBadge').classList.toggle('hide',!n);if(n)$('bookingBadge').textContent=n}
+async function setupCustomerPushNotifications(){
+  if(!NearFamilyBackend.ready||!state.user)return;
+  const key=window.NEAR_FAMILY_FIREBASE_CONFIG?.messagingVapidKey;
+  if(!key||key.startsWith("REPLACE_")||!window.Notification)return;
+  try{
+    const token=await NearFamilyBackend.registerMessagingToken(key);
+    if(token)toast('Notifications enabled for booking updates');
+    NearFamilyBackend.onForegroundMessage(payload=>{
+      const title=payload?.notification?.title||'Near Family update';
+      const body=payload?.notification?.body||'Your booking has a new update.';
+      toast(title+' — '+body);
+    });
+  }catch(e){console.warn('Push notifications unavailable; app continues normally',e)}
+}
 async function syncCloudBookings(){if(!NearFamilyBackend.ready||!state.user)return;try{const cloud=await NearFamilyBackend.listBookings();if(cloud.length){state.bookings=cloud.map(b=>({...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():b.createdAt}));save();renderBookings();let n=state.bookings.filter(b=>b.status!=='completed'&&b.status!=='Completed').length;$('bookingBadge').classList.toggle('hide',!n);if(n)$('bookingBadge').textContent=n}}catch(e){console.warn('Cloud booking sync unavailable; local data retained',e)}}
 async function syncCustomerData(){if(!NearFamilyBackend.ready||!state.user)return;try{const [families,addresses]=await Promise.all([NearFamilyBackend.listFamilyMembers(),NearFamilyBackend.listAddresses()]);if(families.length)state.families=families.map(f=>({id:f.id,name:f.name,relationship:f.relationship,phone:f.phone||'',address:f.address||''}));if(addresses.length)state.addresses=[...new Set(addresses)];save();renderAll()}catch(e){console.warn('Customer data sync unavailable; local data retained',e)}}
 function subscribeToBookingUpdates(){if(!NearFamilyBackend.ready||!state.user)return;if(state.unsubscribeBookings)state.unsubscribeBookings();state.unsubscribeBookings=NearFamilyBackend.subscribeBookings(items=>{state.bookings=items.map(b=>({...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():b.createdAt,status:b.status||'requested'}));save();renderBookings();let n=state.bookings.filter(b=>!['completed','Completed','cancelled'].includes(String(b.status))).length;$('bookingBadge').classList.toggle('hide',!n);if(n)$('bookingBadge').textContent=n})}
-window.addEventListener('load',async()=>{setTimeout(()=>{$('splash').style.display='none';if(state.user)startApp();else $('auth').classList.add('active')},1600);if(!state.user)$('auth').classList.remove('active');try{await NearFamilyBackend.init();if(NearFamilyBackend.ready&&state.user){await NearFamilyBackend.saveUser({name:state.user.name,phone:state.user.phone});await syncCustomerData();await syncCloudBookings();subscribeToBookingUpdates()}}catch(e){console.warn('Backend unavailable; local mode retained',e)}});
+window.addEventListener('load',async()=>{setTimeout(()=>{$('splash').style.display='none';if(state.user)startApp();else $('auth').classList.add('active')},1600);if(!state.user)$('auth').classList.remove('active');try{await NearFamilyBackend.init();if(NearFamilyBackend.ready&&state.user){await NearFamilyBackend.saveUser({name:state.user.name,phone:state.user.phone});await syncCustomerData();await syncCloudBookings();subscribeToBookingUpdates();await setupCustomerPushNotifications()}}catch(e){console.warn('Backend unavailable; local mode retained',e)}});
 </script></body></html>
