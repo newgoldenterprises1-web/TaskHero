@@ -290,6 +290,7 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(!snap.exists) throw new Error("Booking not found");
     const b=snap.data()||{};
     if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
+    if(b.partnerAccepted!==true) throw new Error("Partner must accept the booking before changing its status");
     if(!(allowed[b.status]||[]).includes(next)) throw new Error("Invalid status transition");
     const patch={status:next,updatedAt:FieldValue.serverTimestamp()};
     if(next==="partner_on_the_way")patch.onTheWayAt=FieldValue.serverTimestamp();
@@ -306,8 +307,11 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(next==="cancelled")patch.cancelledAt=FieldValue.serverTimestamp();
     tx.update(ref,patch);
     if((next==="completed" || next==="cancelled") && b.partnerAccepted===true){
-      tx.update(db.collection("partners").doc(uid),{
-        activeJobs:FieldValue.increment(-1),
+      const partnerRef=db.collection("partners").doc(uid);
+      const partnerSnap=await tx.get(partnerRef);
+      const currentJobs=Math.max(0,Number(partnerSnap.data()?.activeJobs||0));
+      tx.update(partnerRef,{
+        activeJobs:Math.max(0,currentJobs-1),
         updatedAt:FieldValue.serverTimestamp()
       });
     }
