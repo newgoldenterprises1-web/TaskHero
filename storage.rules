@@ -35,7 +35,8 @@ service firebase.storage {
     match /partner-kyc/{uid}/{allPaths=**} {
       allow read: if admin() || (signedIn() && request.auth.uid == uid);
       allow write: if signedIn() && request.auth.uid == uid
-        && request.resource.size < 10 * 1024 * 1024;
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf');
     }
   }
 }
