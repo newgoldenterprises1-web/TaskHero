@@ -12,6 +12,9 @@
     async startPhoneVerification(phone,containerId){
       if(!this.ready||!this.auth)return null;
       if(!phone)return null;
+      phone=phone.replace(/[\s()-]/g,"");
+      if(/^\d{10}$/.test(phone))phone="+91"+phone;
+      if(!/^\+[1-9]\d{7,14}$/.test(phone))throw new Error("Use an international phone number such as +91XXXXXXXXXX.");
       if(!this.phoneVerifier){
         this.phoneVerifier=new this.firebase.auth.RecaptchaVerifier(containerId,{size:"invisible"});
       }
