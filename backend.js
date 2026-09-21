@@ -29,10 +29,32 @@
       const ref=await this.db.collection("addresses").add({customerId:u.uid,address:String(address),createdAt:this.firebase.firestore.FieldValue.serverTimestamp(),updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()});
       return ref.id;
     },
+    async uploadBookingPhotos(bookingId,files){
+      const u=await this.signIn();if(!u||!this.storage||!files?.length)return [];
+      const uploads=[];
+      for(const file of Array.from(files).slice(0,5)){
+        if(!file.type?.startsWith("image/"))continue;
+        if(file.size>8*1024*1024)throw new Error("Each photo must be 8 MB or smaller.");
+        const safeName=(file.name||"photo").replace(/[^a-zA-Z0-9._-]/g,"_");
+        const ref=this.storage.ref().child("users/"+u.uid+"/bookings/"+bookingId+"/"+Date.now()+"-"+safeName);
+        const snap=await ref.put(file,{contentType:file.type});
+        const url=await snap.ref.getDownloadURL();
+        uploads.push({name:file.name||safeName,url});
+      }
+      return uploads;
+    },
     async createBooking(data){
       const u=await this.signIn();if(!u)return null;
       const ref=await this.db.collection("bookings").add({...data,customerId:u.uid,status:data.status||"requested",createdAt:this.firebase.firestore.FieldValue.serverTimestamp(),updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()});
       return ref.id;
+    },
+    async attachBookingPhotos(bookingId,photos){
+      const u=await this.signIn();if(!u||!photos?.length)return false;
+      await this.db.collection("bookings").doc(bookingId).update({
+        photos,
+        updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()
+      });
+      return true;
     },
     async getBooking(id){
       if(!this.ready)return null;
