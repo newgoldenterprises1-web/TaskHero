@@ -152,3 +152,19 @@ exports.updateJobStatus=onCall(async(request)=>{
   await ref.update(patch);
   return {ok:true,status:next};
 });
+
+
+exports.requestBookingCancellation=onCall(async(request)=>{
+  if(!request.auth) throw new Error("Authentication required");
+  const bookingId=String(request.data?.bookingId||"");
+  if(!bookingId) throw new Error("bookingId required");
+  const ref=db.collection("bookings").doc(bookingId);
+  const snap=await ref.get();
+  if(!snap.exists) throw new Error("Booking not found");
+  const b=snap.data()||{};
+  if(b.customerId!==request.auth.uid) throw new Error("Not your booking");
+  if(["completed","cancelled","cancellation_requested"].includes(b.status)) throw new Error("Booking cannot be cancelled now");
+  await ref.update({status:"cancellation_requested",cancellationRequestedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+  if(b.partnerId) await notifyUser(b.partnerId,"Near Family — Cancellation requested","The customer has requested cancellation of a booking.",{bookingId,status:"cancellation_requested"});
+  return {ok:true,status:"cancellation_requested"};
+});
