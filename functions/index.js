@@ -139,18 +139,27 @@ exports.updateJobStatus=onCall(async(request)=>{
   const allowed={partner_assigned:["partner_on_the_way","cancelled"],partner_on_the_way:["service_started","cancelled"],service_started:["completed","cancelled"]};
   if(!bookingId || !allowed[next]) throw new Error("Invalid status request");
   const ref=db.collection("bookings").doc(bookingId);
-  const snap=await ref.get();
-  if(!snap.exists) throw new Error("Booking not found");
-  const b=snap.data()||{};
-  if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
-  if(!(allowed[b.status]||[]).includes(next)) throw new Error("Invalid status transition");
-  const patch={status:next,updatedAt:FieldValue.serverTimestamp()};
-  if(next==="partner_on_the_way")patch.onTheWayAt=FieldValue.serverTimestamp();
-  if(next==="service_started")patch.serviceStartedAt=FieldValue.serverTimestamp();
-  if(next==="completed"){\n    if(!request.data?.proofUrl) throw new Error("Completion proof is required");\n    patch.completedAt=FieldValue.serverTimestamp();\n    patch.completionProofUrl=String(request.data.proofUrl);\n    patch.completionNotes=String(request.data.notes||"");\n  }
-  if(next==="cancelled")patch.cancelledAt=FieldValue.serverTimestamp();
-  await ref.update(patch);
-  return {ok:true,status:next};
+  let result;
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists) throw new Error("Booking not found");
+    const b=snap.data()||{};
+    if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
+    if(!(allowed[b.status]||[]).includes(next)) throw new Error("Invalid status transition");
+    const patch={status:next,updatedAt:FieldValue.serverTimestamp()};
+    if(next==="partner_on_the_way")patch.onTheWayAt=FieldValue.serverTimestamp();
+    if(next==="service_started")patch.serviceStartedAt=FieldValue.serverTimestamp();
+    if(next==="completed"){
+      if(!request.data?.proofUrl) throw new Error("Completion proof is required");
+      patch.completedAt=FieldValue.serverTimestamp();
+      patch.completionProofUrl=String(request.data.proofUrl);
+      patch.completionNotes=String(request.data.notes||"");
+    }
+    if(next==="cancelled")patch.cancelledAt=FieldValue.serverTimestamp();
+    tx.update(ref,patch);
+    result={ok:true,status:next};
+  });
+  return result;
 });
 
 
@@ -159,12 +168,20 @@ exports.requestBookingCancellation=onCall(async(request)=>{
   const bookingId=String(request.data?.bookingId||"");
   if(!bookingId) throw new Error("bookingId required");
   const ref=db.collection("bookings").doc(bookingId);
-  const snap=await ref.get();
-  if(!snap.exists) throw new Error("Booking not found");
-  const b=snap.data()||{};
-  if(b.customerId!==request.auth.uid) throw new Error("Not your booking");
-  if(["completed","cancelled","cancellation_requested"].includes(b.status)) throw new Error("Booking cannot be cancelled now");
-  await ref.update({status:"cancellation_requested",cancellationRequestedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
-  if(b.partnerId) await notifyUser(b.partnerId,"Near Family — Cancellation requested","The customer has requested cancellation of a booking.",{bookingId,status:"cancellation_requested"});
+  let partnerId=null;
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists) throw new Error("Booking not found");
+    const b=snap.data()||{};
+    if(b.customerId!==request.auth.uid) throw new Error("Not your booking");
+    if(["completed","cancelled","cancellation_requested"].includes(b.status)) throw new Error("Booking cannot be cancelled now");
+    partnerId=b.partnerId||null;
+    tx.update(ref,{
+      status:"cancellation_requested",
+      cancellationRequestedAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp()
+    });
+  });
+  if(partnerId) await notifyUser(partnerId,"Near Family — Cancellation requested","The customer has requested cancellation of a booking.",{bookingId,status:"cancellation_requested"});
   return {ok:true,status:"cancellation_requested"};
 });
