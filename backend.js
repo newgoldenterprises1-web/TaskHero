@@ -43,6 +43,29 @@
       const u=await this.signIn();if(!u)return [];
       const snap=await this.db.collection("bookings").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50).get();
       return snap.docs.map(d=>({id:d.id,...d.data()}));
+    },
+    async listFamilyMembers(){
+      const u=await this.signIn();if(!u)return [];
+      const snap=await this.db.collection("familyMembers").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50).get();
+      return snap.docs.map(d=>({id:d.id,...d.data()}));
+    },
+    async listAddresses(){
+      const u=await this.signIn();if(!u)return [];
+      const snap=await this.db.collection("addresses").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50).get();
+      return snap.docs.map(d=>d.data().address).filter(Boolean);
+    },
+    subscribeBookings(callback){
+      if(!this.ready)return ()=>{};
+      let active=true;
+      this.signIn().then(u=>{
+        if(!u||!active)return;
+        this.db.collection("bookings").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50)
+          .onSnapshot(snap=>{
+            if(!active)return;
+            callback(snap.docs.map(d=>({id:d.id,...d.data()})));
+          },err=>console.warn("Booking realtime sync unavailable",err));
+      }).catch(err=>console.warn("Booking realtime auth unavailable",err));
+      return ()=>{active=false};
     }
   };
 })();
