@@ -69,9 +69,9 @@ describe("Near Family security rules",function(){
         customerId:"customer-a",partnerId:"partner-a",status:"partner_assigned"
       });
     });
-    await assertSucceeds(getDoc(testEnv.authenticatedContext("customer-a").firestore().doc("bookings/b2")));
-    await assertSucceeds(getDoc(testEnv.authenticatedContext("partner-a").firestore().doc("bookings/b2")));
-    await assertFails(getDoc(testEnv.authenticatedContext("partner-b").firestore().doc("bookings/b2")));
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext("customer-a").firestore(),"bookings/b2")));
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext("partner-a").firestore(),"bookings/b2")));
+    await assertFails(getDoc(doc(testEnv.authenticatedContext("partner-b").firestore(),"bookings/b2")));
   });
 
   it("prevents partners from changing protected profile fields",async()=>{
