@@ -180,6 +180,7 @@ async function requirePartner(request){
   if(!snap.exists) throw new Error("Partner profile not found");
   const partner=snap.data()||{};
   if(partner.approved!==true) throw new Error("Partner is not approved yet");
+  if(partner.online!==true || partner.available===false) throw new Error("Partner is not currently available");
   return {uid:request.auth.uid,partner};
 }
 
@@ -195,8 +196,13 @@ exports.acceptBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(!snap.exists) throw new Error("Booking not found");
     const b=snap.data()||{};
     if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
-    if(b.status!=="partner_assigned") throw new Error("Booking is no longer available");
+    if(b.status!=="partner_assigned" || b.partnerAccepted===true) throw new Error("Booking is no longer available");
+    const partnerRef=db.collection("partners").doc(uid);
+    const partnerSnap=await tx.get(partnerRef);
+    const partner=partnerSnap.data()||{};
+    if(partner.approved!==true || partner.online!==true || partner.available===false) throw new Error("Partner is not currently available");
     tx.update(ref,{partnerAccepted:true,acceptedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+    tx.update(partnerRef,{activeJobs:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()});
     result={id:snap.id,...b,partnerAccepted:true};
   });
   await auditSecurityEvent({type:"booking_accepted",uid,bookingId});
@@ -213,7 +219,7 @@ exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!snap.exists) throw new Error("Booking not found");
   const b=snap.data()||{};
   if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
-  if(!["partner_assigned","requested","searching_partner"].includes(b.status)) throw new Error("Booking cannot be rejected now");
+  if(!["partner_assigned","requested","searching_partner"].includes(b.status) || b.partnerAccepted===true) throw new Error("Booking cannot be rejected now");
   await ref.update({partnerId:FieldValue.delete(),partnerAccepted:false,status:"searching_partner",rejectedPartnerIds:FieldValue.arrayUnion(uid),updatedAt:FieldValue.serverTimestamp()});
   const updated=(await ref.get()).data()||{};
   const partner=await findPartner(updated);
@@ -256,6 +262,12 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
     }
     if(next==="cancelled")patch.cancelledAt=FieldValue.serverTimestamp();
     tx.update(ref,patch);
+    if((next==="completed" || next==="cancelled") && b.partnerAccepted===true){
+      tx.update(db.collection("partners").doc(uid),{
+        activeJobs:FieldValue.increment(-1),
+        updatedAt:FieldValue.serverTimestamp()
+      });
+    }
     result={ok:true,status:next};
   });
   await auditSecurityEvent({type:"booking_status_changed",uid,bookingId,status:next});
