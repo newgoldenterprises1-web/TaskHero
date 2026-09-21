@@ -18,12 +18,6 @@ service firebase.storage {
         && bookingCustomer(bookingId);
     }
 
-    match /users/{uid}/{allPaths=**} {
-      allow read: if signedIn() && request.auth.uid == uid;
-      allow write: if signedIn() && request.auth.uid == uid
-        && request.resource.size < 10 * 1024 * 1024;
-    }
-
     match /bookings/{bookingId}/completion/{allPaths=**} {
       allow read: if admin() || bookingCustomer(bookingId) || bookingPartner(bookingId);
       allow write: if bookingPartner(bookingId)
