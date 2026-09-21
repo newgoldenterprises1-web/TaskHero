@@ -53,6 +53,8 @@ async function initPartner(){
   $("refreshBtn").onclick=loadRequests; $("saveProfile").onclick=saveProfile;
   $("onlineBtn").onclick=()=>togglePartner("online"); $("availableBtn").onclick=()=>togglePartner("available");
   loadRequests();
+  subscribePartnerBookings();
+  setupPartnerPush();
  }catch(e){console.error(e);setStatus("Connection error");$("msg").textContent=e.message||String(e);}
 }
 function renderProfile(){
@@ -75,11 +77,28 @@ function requestCard(b){
 }
 async function loadRequests(){
  if(!partnerUser)return;
- const snap=await NearFamilyBackend.db.collection("bookings").where("partnerId","==",partnerUser.uid).orderBy("createdAt","desc").limit(30).get();
- const list=snap.docs.map(d=>({id:d.id,...d.data()}));
+ try{
+  const snap=await NearFamilyBackend.db.collection("bookings").where("partnerId","==",partnerUser.uid).orderBy("createdAt","desc").limit(30).get();
+  renderRequests(snap.docs.map(d=>({id:d.id,...d.data()})));
+ }catch(e){$("requests").innerHTML='<div class="text-sm text-red-500">Unable to load assigned jobs.</div>';console.warn(e);}
+}
+function renderRequests(list){
  $("requests").innerHTML=list.length?list.map(requestCard).join(""):'<div class="text-sm text-slate-400">No assigned jobs right now.</div>';
- const active=list.find(x=>["partner_assigned","partner_on_the_way","service_started"].includes(x.status));
+ const active=list.find(x=>["partner_assigned","partner_on_the_way","service_started","cancellation_requested"].includes(x.status));
  if(active)openActive(active.id); else $("activeSection").classList.add("hidden");
+}
+function subscribePartnerBookings(){
+ if(unsubscribe)unsubscribe();
+ unsubscribe=NearFamilyBackend.db.collection("bookings").where("partnerId","==",partnerUser.uid).orderBy("createdAt","desc").limit(30)
+ .onSnapshot(snap=>renderRequests(snap.docs.map(d=>({id:d.id,...d.data()}))),err=>console.warn("Partner realtime booking sync unavailable",err));
+}
+async function setupPartnerPush(){
+ const key=window.NEAR_FAMILY_FIREBASE_CONFIG?.messagingVapidKey;
+ if(!key||key.startsWith("REPLACE_")||!window.Notification)return;
+ try{
+  const token=await NearFamilyBackend.registerMessagingToken(key);
+  if(token) $("msg").textContent="Notifications enabled for job updates.";
+ }catch(e){console.warn("Partner push unavailable",e);}
 }
 async function acceptJob(id){
  try{await functionsApi().httpsCallable("acceptBooking")({bookingId:id});await loadRequests();openActive(id);}catch(e){alert(e.message||String(e));}
