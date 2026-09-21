@@ -14,6 +14,23 @@
       if(!this.auth.currentUser)await this.auth.signInAnonymously();
       return this.auth.currentUser;
     },
+    async registerMessagingToken(vapidKey){
+      const u=await this.signIn();
+      if(!u||!vapidKey||!window.Notification||!this.firebase?.messaging)return null;
+      if(Notification.permission==="denied")return null;
+      const permission=await Notification.requestPermission();
+      if(permission!=="granted")return null;
+      const messaging=this.firebase.messaging();
+      const token=await messaging.getToken({vapidKey});
+      if(token){
+        await this.db.collection("users").doc(u.uid).set({
+          fcmToken:token,
+          fcmTokenUpdatedAt:this.firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()
+        },{merge:true});
+      }
+      return token;
+    },
     async saveUser(data){
       const u=await this.signIn();if(!u)return null;
       await this.db.collection("users").doc(u.uid).set({...data,updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
@@ -80,6 +97,11 @@
       const u=await this.signIn();if(!u)return [];
       const snap=await this.db.collection("addresses").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50).get();
       return snap.docs.map(d=>d.data().address).filter(Boolean);
+    },
+    onForegroundMessage(callback){
+      if(!this.ready||!this.firebase?.messaging)return ()=>{};
+      const messaging=this.firebase.messaging();
+      return messaging.onMessage(payload=>callback?.(payload));
     },
     subscribeBookings(callback){
       if(!this.ready)return ()=>{};
