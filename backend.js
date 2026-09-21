@@ -56,6 +56,11 @@
       });
       return true;
     },
+    async requestBookingCancellation(bookingId){
+      const u=await this.signIn();if(!u||!this.firebase.functions)return null;
+      const fn=this.firebase.functions().httpsCallable("requestBookingCancellation");
+      return (await fn({bookingId})).data;
+    },
     async getBooking(id){
       if(!this.ready)return null;
       const s=await this.db.collection("bookings").doc(id).get();
