@@ -6,7 +6,10 @@ service cloud.firestore {
     function owner(uid){ return signedIn() && request.auth.uid == uid; }
 
     match /users/{uid} {
-      allow create: if owner(uid);
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly([
+          "name","phone","updatedAt"
+        ]);
       allow read: if owner(uid) || admin();
       allow update: if owner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -33,10 +36,10 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.customerId == request.auth.uid
         && request.resource.data.status == "requested"
-        && !request.resource.data.keys().hasAny([
-          "partnerId","partnerAccepted","rejectedPartnerIds","dispatchedAt",
-          "acceptedAt","onTheWayAt","serviceStartedAt","completedAt",
-          "cancelledAt","cancellationRequestedAt","completionProofUrl"
+        && request.resource.data.keys().hasOnly([
+          "service","category","price","name","phone","for","forWho",
+          "familyMemberId","address","date","time","instructions","photos",
+          "location","customerId","status","createdAt","updatedAt"
         ]);
 
       allow read: if admin() || (signedIn() && (
