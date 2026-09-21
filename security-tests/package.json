@@ -1,0 +1,11 @@
+{
+  "name":"near-family-security-tests",
+  "private":true,
+  "engines":{"node":">=20"},
+  "scripts":{"test":"mocha --timeout 20000 rules.test.js"},
+  "devDependencies":{
+    "@firebase/rules-unit-testing":"^3.0.4",
+    "firebase":"^11.0.0",
+    "mocha":"^11.0.1"
+  }
+}
