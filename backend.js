@@ -2,11 +2,18 @@
 (function(){
   const cfg=window.NEAR_FAMILY_FIREBASE_CONFIG;
   const B=window.NearFamilyBackend={
-    ready:false,firebase:null,auth:null,db:null,storage:null,phoneVerifier:null,phoneConfirmation:null,
+    ready:false,firebase:null,auth:null,db:null,storage:null,appCheck:null,phoneVerifier:null,phoneConfirmation:null,
     async init(){
       if(!cfg?.projectId||cfg.projectId.startsWith("REPLACE_")||!window.firebase)return false;
       if(!firebase.apps.length)firebase.initializeApp(cfg);
-      this.firebase=firebase;this.auth=firebase.auth();this.db=firebase.firestore();this.storage=firebase.storage();
+      this.firebase=firebase;
+      if(cfg.appCheckRecaptchaSiteKey && !cfg.appCheckRecaptchaSiteKey.startsWith("REPLACE_") && firebase.appCheck){
+        try{
+          this.appCheck=firebase.appCheck();
+          this.appCheck.activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(cfg.appCheckRecaptchaSiteKey),true);
+        }catch(e){console.warn("App Check initialization failed; Firebase services remain available until enforcement is enabled.",e)}
+      }
+      this.auth=firebase.auth();this.db=firebase.firestore();this.storage=firebase.storage();
       this.ready=true;return true;
     },
     async startPhoneVerification(phone,containerId){
