@@ -1,0 +1,36 @@
+name: Near Family Security Tests
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "firestore.rules"
+      - "storage.rules"
+      - "functions/**"
+      - "security-tests/**"
+      - "firebase.json"
+  pull_request:
+    paths:
+      - "firestore.rules"
+      - "storage.rules"
+      - "functions/**"
+      - "security-tests/**"
+      - "firebase.json"
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: security-tests/package.json
+      - name: Install security test dependencies
+        working-directory: security-tests
+        run: npm install
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+      - name: Run Firestore and Storage emulator tests
+        run: firebase emulators:exec --project demo-near-family --only firestore,storage "npm test --prefix security-tests"
