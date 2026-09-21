@@ -95,20 +95,10 @@
       return uploads;
     },
     async createBooking(data){
-      const u=await this.signIn();if(!u)return null;
-      const payload={...(data||{})};
-      [
-        "id","customerId","partnerId","partnerAccepted","rejectedPartnerIds",
-        "dispatchedAt","acceptedAt","onTheWayAt","serviceStartedAt",
-        "completedAt","cancelledAt","cancellationRequestedAt",
-        "completionProofUrl","status","createdAt","updatedAt"
-      ].forEach(k=>delete payload[k]);
-      payload.customerId=u.uid;
-      payload.status="requested";
-      payload.createdAt=this.firebase.firestore.FieldValue.serverTimestamp();
-      payload.updatedAt=this.firebase.firestore.FieldValue.serverTimestamp();
-      const ref=await this.db.collection("bookings").add(payload);
-      return ref.id;
+      const u=await this.signIn();if(!u||!this.firebase.functions)return null;
+      const fn=this.firebase.functions().httpsCallable("createBooking");
+      const result=await fn(data||{});
+      return result?.data?.id||null;
     },
     async attachBookingPhotos(bookingId,photos){
       const u=await this.signIn();if(!u||!photos?.length)return false;
