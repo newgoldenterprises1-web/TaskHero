@@ -32,6 +32,15 @@
       if(!this.auth.currentUser)await this.auth.signInAnonymously();
       return this.auth.currentUser;
     },
+    async signOut(){
+      if(!this.ready||!this.auth)return;
+      if(this.phoneVerifier){
+        try{this.phoneVerifier.clear()}catch(e){}
+        this.phoneVerifier=null;
+      }
+      this.phoneConfirmation=null;
+      await this.auth.signOut();
+    },
     async registerMessagingToken(vapidKey){
       const u=await this.signIn();
       if(!u||!vapidKey||!window.Notification||!this.firebase?.messaging)return null;
