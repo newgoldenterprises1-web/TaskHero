@@ -84,15 +84,17 @@
     subscribeBookings(callback){
       if(!this.ready)return ()=>{};
       let active=true;
+      let unsubscribe=null;
       this.signIn().then(u=>{
         if(!u||!active)return;
-        this.db.collection("bookings").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50)
+        unsubscribe=this.db.collection("bookings").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50)
           .onSnapshot(snap=>{
             if(!active)return;
             callback(snap.docs.map(d=>({id:d.id,...d.data()})));
           },err=>console.warn("Booking realtime sync unavailable",err));
+        if(!active&&unsubscribe)unsubscribe();
       }).catch(err=>console.warn("Booking realtime auth unavailable",err));
-      return ()=>{active=false};
+      return ()=>{active=false;if(unsubscribe)unsubscribe();};
     }
   };
 })();
