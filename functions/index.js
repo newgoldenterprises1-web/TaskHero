@@ -109,6 +109,16 @@ exports.onSecurityEventCreated=onDocumentCreated("securityEvents/{eventId}",asyn
     });
   }
 
+  const statusChanges10=events.filter(e=>e.type==="booking_status_changed" && e.createdAt?.toMillis && e.createdAt.toMillis()>=now-10*60*1000).length;
+  if(statusChanges10>=6){
+    await createSecurityAlert({
+      type:"rapid_booking_status_changes",severity:"high",uid,
+      reason:"A rapid sequence of booking status changes was detected within 10 minutes.",
+      sourceEventId:event.params.eventId,
+      metadata:{count:statusChanges10,windowMinutes:10}
+    });
+  }
+
   const rejectsHour=events.filter(e=>e.type==="booking_rejected").length;
   if(rejectsHour>=8){
     await createSecurityAlert({
@@ -423,6 +433,57 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
   return result;
 });
 
+
+exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
+  if(!request.auth) throw new Error("Authentication required");
+  const bookingId=String(request.data?.bookingId||"");
+  const decision=String(request.data?.decision||"").toLowerCase();
+  if(!bookingId || bookingId.length>128 || !["approve","reject"].includes(decision)) throw new Error("Invalid cancellation resolution");
+  const isAdmin=request.auth.token?.admin===true;
+  const ref=db.collection("bookings").doc(bookingId);
+  let result;
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists) throw new Error("Booking not found");
+    const b=snap.data()||{};
+    if(b.status!=="cancellation_requested") throw new Error("Cancellation is not pending");
+    if(!isAdmin && b.partnerId!==request.auth.uid) throw new Error("Not authorized to resolve this cancellation");
+    if(decision==="reject"){
+      const restoredStatus=b.partnerAccepted===true?"partner_assigned":"searching_partner";
+      tx.update(ref,{
+        status:restoredStatus,
+        cancellationRejectedAt:FieldValue.serverTimestamp(),
+        cancellationRejectedBy:request.auth.uid,
+        updatedAt:FieldValue.serverTimestamp()
+      });
+      result={status:restoredStatus};
+      return;
+    }
+    const partnerWasAccepted=b.partnerAccepted===true;
+    tx.update(ref,{
+      status:"cancelled",
+      cancelledAt:FieldValue.serverTimestamp(),
+      cancellationResolvedAt:FieldValue.serverTimestamp(),
+      cancellationResolvedBy:request.auth.uid,
+      updatedAt:FieldValue.serverTimestamp()
+    });
+    if(partnerWasAccepted && b.partnerId){
+      const partnerRef=db.collection("partners").doc(b.partnerId);
+      const partnerSnap=await tx.get(partnerRef);
+      const jobs=Math.max(0,Number(partnerSnap.data()?.activeJobs||0));
+      tx.update(partnerRef,{activeJobs:Math.max(0,jobs-1),updatedAt:FieldValue.serverTimestamp()});
+    }
+    result={status:"cancelled"};
+  });
+  await auditSecurityEvent({
+    type:"booking_cancellation_resolved",
+    uid:request.auth.uid,
+    bookingId,
+    decision,
+    isAdmin
+  });
+  return {ok:true,...result};
+});
 
 exports.requestBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
