@@ -38,7 +38,10 @@ async function rateLimit(uid,action){
       tx.set(ref,{uid,action,count:1,windowStart:now,updatedAt:FieldValue.serverTimestamp()},{merge:true});
     }
   });
-  if(!allowed) throw new Error("Too many requests. Please try again later.");
+  if(!allowed){
+    await auditSecurityEvent({type:"rate_limit_blocked",uid,action});
+    throw new Error("Too many requests. Please try again later.");
+  }
 }
 
 async function auditSecurityEvent(event){
@@ -150,14 +153,30 @@ exports.onBookingCreated=onDocumentCreated("bookings/{bookingId}",async(event)=>
   if(booking.partnerId)return;
   const partner=await findPartner(booking);
   if(partner){
-    await ref.update({
-      status:"partner_assigned",
-      partnerId:partner.id,
-      dispatchedAt:FieldValue.serverTimestamp(),
-      updatedAt:FieldValue.serverTimestamp()
+    let assigned=false;
+    await db.runTransaction(async(tx)=>{
+      const current=await tx.get(ref);
+      if(!current.exists) return;
+      const currentBooking=current.data()||{};
+      if(currentBooking.partnerId || !["requested","searching_partner"].includes(currentBooking.status)) return;
+      const partnerRef=db.collection("partners").doc(partner.id);
+      const partnerSnap=await tx.get(partnerRef);
+      const livePartner=partnerSnap.data()||{};
+      if(livePartner.approved!==true || livePartner.online!==true || livePartner.available===false) return;
+      tx.update(ref,{
+        status:"partner_assigned",
+        partnerId:partner.id,
+        dispatchedAt:FieldValue.serverTimestamp(),
+        updatedAt:FieldValue.serverTimestamp()
+      });
+      assigned=true;
     });
-    await notifyUser(booking.customerId,"Near Family — Partner assigned","A partner has been assigned to your request.",{bookingId:event.params.bookingId,status:"partner_assigned"});
-    await notifyUser(partner.id,"New Near Family job","You have a new service request.",{bookingId:event.params.bookingId,status:"partner_assigned"});
+    if(assigned){
+      await notifyUser(booking.customerId,"Near Family — Partner assigned","A partner has been assigned to your request.",{bookingId:event.params.bookingId,status:"partner_assigned"});
+      await notifyUser(partner.id,"New Near Family job","You have a new service request.",{bookingId:event.params.bookingId,status:"partner_assigned"});
+    }else{
+      await ref.update({status:"searching_partner",updatedAt:FieldValue.serverTimestamp()});
+    }
   }else{
     await ref.update({status:"searching_partner",updatedAt:FieldValue.serverTimestamp()});
     await notifyUser(booking.customerId,"Near Family — Finding a partner","We're finding an available verified partner for your request.",{bookingId:event.params.bookingId,status:"searching_partner"});
