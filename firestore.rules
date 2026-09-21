@@ -9,14 +9,17 @@ service cloud.firestore {
       allow create,read,update: if owner(uid)||admin();
       allow delete: if admin();
     }
+
     match /familyMembers/{id}{
       allow create: if signedIn() && request.resource.data.customerId==request.auth.uid;
       allow read,update,delete: if admin() || (signedIn() && resource.data.customerId==request.auth.uid);
     }
+
     match /addresses/{id}{
       allow create: if signedIn() && request.resource.data.customerId==request.auth.uid;
       allow read,update,delete: if admin() || (signedIn() && resource.data.customerId==request.auth.uid);
     }
+
     match /bookings/{id}{
       allow create: if signedIn() && request.resource.data.customerId==request.auth.uid;
       allow read: if admin() || (signedIn() && (resource.data.customerId==request.auth.uid || resource.data.partnerId==request.auth.uid));
@@ -27,17 +30,23 @@ service cloud.firestore {
             && request.resource.data.status==resource.data.status)
         || (signedIn() && resource.data.partnerId==request.auth.uid
             && request.resource.data.customerId==resource.data.customerId
-            && request.resource.data.partnerId==resource.data.partnerId);
+            && request.resource.data.partnerId==resource.data.partnerId
+            && request.resource.data.status in ["partner_assigned","partner_on_the_way","service_started","completed","cancelled"]);
       allow delete: if admin();
     }
+
     match /partners/{uid}{
-      allow create,read,update: if admin()||owner(uid);
+      allow create: if owner(uid);
+      allow read: if admin()||owner(uid);
+      allow update: if owner(uid) || admin();
       allow delete: if admin();
     }
+
     match /services/{id}{
       allow read: if true;
       allow create,update,delete: if admin();
     }
+
     match /supportTickets/{id}{
       allow create: if signedIn() && request.resource.data.customerId==request.auth.uid;
       allow read,update: if admin() || (signedIn() && resource.data.customerId==request.auth.uid);
