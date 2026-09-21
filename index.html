@@ -17,8 +17,8 @@
 
 <!-- AUTH -->
 <div id="auth" class="screen min-h-screen px-5 flex items-center justify-center bg-[#f7fcfa]"><div class="w-full max-w-md"><div class="text-center mb-7"><div class="inline-flex w-14 h-14 rounded-2xl bg-[#176b5b] text-white items-center justify-center text-2xl">♥</div><h2 class="text-3xl font-black mt-4">Welcome to Near Family</h2><p class="text-sm text-[#638079] mt-1">Trusted help for you and the people who matter.</p></div><div class="bg-white border border-[#dcefe7] rounded-3xl p-6 soft">
-<div id="loginBox"><h3 class="text-xl font-black">Welcome back 👋</h3><p class="text-xs text-slate-500 mt-1 mb-5">Sign in to manage your family's help.</p><input id="loginPhone" type="tel" placeholder="Mobile Number (+91)" class="w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3 outline-none focus:border-[#176b5b]"><button onclick="login()" class="w-full bg-[#176b5b] text-white font-bold py-3.5 rounded-2xl">Continue</button><p class="text-center text-xs text-slate-500 mt-5">New here? <button onclick="toggleAuth(true)" class="text-[#176b5b] font-bold">Create account</button></p></div>
-<div id="signupBox" class="hide"><h3 class="text-xl font-black">Create your account</h3><p class="text-xs text-slate-500 mt-1 mb-5">Let's make family assistance easier.</p><input id="signupName" placeholder="Full Name" class="w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3"><input id="signupPhone" type="tel" placeholder="Mobile Number (+91)" class="w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3"><button onclick="signup()" class="w-full bg-[#176b5b] text-white font-bold py-3.5 rounded-2xl">Get Started</button><p class="text-center text-xs text-slate-500 mt-5">Already have an account? <button onclick="toggleAuth(false)" class="text-[#176b5b] font-bold">Login</button></p></div>
+<div id="loginBox"><h3 class="text-xl font-black">Welcome back 👋</h3><p class="text-xs text-slate-500 mt-1 mb-5">Sign in to manage your family's help.</p><input id="loginPhone" type="tel" placeholder="Mobile Number (+91)" class="w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3 outline-none focus:border-[#176b5b]"><div id="loginRecaptcha"></div><input id="loginOtp" inputmode="numeric" maxlength="6" placeholder="Enter OTP" class="hidden w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3 outline-none focus:border-[#176b5b]"><button id="loginBtn" onclick="login()" class="w-full bg-[#176b5b] text-white font-bold py-3.5 rounded-2xl">Continue</button><p class="text-center text-xs text-slate-500 mt-5">New here? <button onclick="toggleAuth(true)" class="text-[#176b5b] font-bold">Create account</button></p></div>
+<div id="signupBox" class="hide"><h3 class="text-xl font-black">Create your account</h3><p class="text-xs text-slate-500 mt-1 mb-5">Let's make family assistance easier.</p><input id="signupName" placeholder="Full Name" class="w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3"><input id="signupPhone" type="tel" placeholder="Mobile Number (+91)" class="w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3"><div id="signupRecaptcha"></div><input id="signupOtp" inputmode="numeric" maxlength="6" placeholder="Enter OTP" class="hidden w-full border border-[#cfe3dc] rounded-2xl px-4 py-3.5 mb-3 outline-none focus:border-[#176b5b]"><button id="signupBtn" onclick="signup()" class="w-full bg-[#176b5b] text-white font-bold py-3.5 rounded-2xl">Get Started</button><p class="text-center text-xs text-slate-500 mt-5">Already have an account? <button onclick="toggleAuth(false)" class="text-[#176b5b] font-bold">Login</button></p></div>
 </div></div></div>
 
 <!-- APP -->
@@ -78,8 +78,48 @@ function save(){localStorage.setItem('nf_user',JSON.stringify(state.user));local
 function $(id){return document.getElementById(id)}
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2200)}
 function toggleAuth(sign){$('loginBox').classList.toggle('hide',sign);$('signupBox').classList.toggle('hide',!sign)}
-async function login(){let phone=$('loginPhone').value.trim();if(phone.length<10)return toast('Please enter a valid mobile number.');state.user={name:'Near Family Customer',phone};save();if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name:state.user.name,phone});startApp()}
-async function signup(){let name=$('signupName').value.trim(),phone=$('signupPhone').value.trim();if(!name||phone.length<10)return toast('Please enter your name and mobile number.');state.user={name,phone};save();if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name,phone});startApp()}
+async function login(){
+  let phone=$('loginPhone').value.trim();
+  if(phone.length<10)return toast('Please enter a valid mobile number.');
+  if(NearFamilyBackend.ready){
+    try{
+      if(!$('loginOtp').classList.contains('hidden')){
+        let code=$('loginOtp').value.trim();
+        if(code.length!==6)return toast('Please enter the 6-digit OTP.');
+        const u=await NearFamilyBackend.confirmPhoneCode(code);
+        if(!u)return toast('OTP verification failed.');
+      }else{
+        await NearFamilyBackend.startPhoneVerification(phone,'loginRecaptcha');
+        $('loginOtp').classList.remove('hidden');$('loginBtn').textContent='Verify OTP';$('loginPhone').disabled=true;
+        return toast('OTP sent to your mobile.');
+      }
+    }catch(e){console.warn(e);return toast('OTP could not be sent. Check Firebase Phone Auth setup.')}
+  }
+  state.user={name:'Near Family Customer',phone};save();
+  if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name:state.user.name,phone});
+  startApp();
+}
+async function signup(){
+  let name=$('signupName').value.trim(),phone=$('signupPhone').value.trim();
+  if(!name||phone.length<10)return toast('Please enter your name and mobile number.');
+  if(NearFamilyBackend.ready){
+    try{
+      if(!$('signupOtp').classList.contains('hidden')){
+        let code=$('signupOtp').value.trim();
+        if(code.length!==6)return toast('Please enter the 6-digit OTP.');
+        const u=await NearFamilyBackend.confirmPhoneCode(code);
+        if(!u)return toast('OTP verification failed.');
+      }else{
+        await NearFamilyBackend.startPhoneVerification(phone,'signupRecaptcha');
+        $('signupOtp').classList.remove('hidden');$('signupBtn').textContent='Verify OTP';$('signupPhone').disabled=true;
+        return toast('OTP sent to your mobile.');
+      }
+    }catch(e){console.warn(e);return toast('OTP could not be sent. Check Firebase Phone Auth setup.')}
+  }
+  state.user={name,phone};save();
+  if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name,phone});
+  startApp();
+}
 function startApp(){$('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');$('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';$('profileName').textContent=state.user?.name||'Customer';$('profilePhone').textContent=state.user?.phone||'';renderAll();requestLocation()}
 function logout(){state.user=null;save();$('app').classList.remove('active');$('auth').classList.add('active');toggleAuth(false);toast('Logged out')}
 function go(page){['home','bookings','family','profile'].forEach(x=>{let p=$(x+'Page');if(p)p.classList.toggle('hide',x!==page)});$('homePage').classList.toggle('hide',page!=='home');document.querySelectorAll('.nav').forEach((n,i)=>n.classList.remove('text-[#176b5b]','font-bold'));renderAll();window.scrollTo(0,0)}
