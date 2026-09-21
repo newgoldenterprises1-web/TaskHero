@@ -8,7 +8,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow create: if owner(uid)
         && request.resource.data.keys().hasOnly([
-          "name","phone","updatedAt"
+          "name","phone","fcmToken","fcmTokenUpdatedAt","updatedAt"
         ]);
       allow read: if owner(uid) || admin();
       allow update: if owner(uid)
@@ -19,16 +19,34 @@ service cloud.firestore {
     }
 
     match /familyMembers/{id} {
-      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "customerId","name","relationship","phone","address","notes","createdAt","updatedAt"
+        ]);
       allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
-      allow update: if admin() || (signedIn() && resource.data.customerId == request.auth.uid && request.resource.data.customerId == resource.data.customerId);
+      allow update: if admin()
+        || (signedIn()
+          && resource.data.customerId == request.auth.uid
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "name","relationship","phone","address","notes","updatedAt"
+          ]));
       allow delete: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
     }
 
     match /addresses/{id} {
-      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "customerId","address","createdAt","updatedAt"
+        ]);
       allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
-      allow update: if admin() || (signedIn() && resource.data.customerId == request.auth.uid && request.resource.data.customerId == resource.data.customerId);
+      allow update: if admin()
+        || (signedIn()
+          && resource.data.customerId == request.auth.uid
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["address","updatedAt"]));
       allow delete: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
     }
 
@@ -52,14 +70,24 @@ service cloud.firestore {
           && resource.data.customerId == request.auth.uid
           && request.resource.data.customerId == resource.data.customerId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["photos","updatedAt"]));
-
       allow delete: if admin();
     }
 
     match /partners/{uid} {
-      allow create: if owner(uid);
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly([
+          "name","phone","serviceCategories","online","available",
+          "approved","activeJobs","rating","createdAt","updatedAt"
+        ])
+        && request.resource.data.approved == false
+        && request.resource.data.activeJobs == 0
+        && request.resource.data.rating == 0;
       allow read: if admin() || owner(uid);
-      allow update: if owner(uid) || admin();
+      allow update: if admin()
+        || (owner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "name","phone","serviceCategories","online","available","updatedAt"
+          ]));
       allow delete: if admin();
     }
 
@@ -69,7 +97,12 @@ service cloud.firestore {
     }
 
     match /supportTickets/{id} {
-      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "customerId","subject","message","status","createdAt","updatedAt"
+        ])
+        && request.resource.data.status == "open";
       allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
       allow update, delete: if admin();
     }
