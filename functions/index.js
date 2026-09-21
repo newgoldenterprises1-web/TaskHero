@@ -18,7 +18,8 @@ const RATE_WINDOWS={
   accept:{max:30,windowMs:10*60*1000},
   reject:{max:30,windowMs:10*60*1000},
   status:{max:30,windowMs:10*60*1000},
-  cancel:{max:5,windowMs:10*60*1000}
+  cancel:{max:5,windowMs:10*60*1000},
+  resolve_cancel:{max:20,windowMs:10*60*1000}
 };
 
 async function rateLimit(uid,action){
@@ -439,6 +440,7 @@ exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
   const bookingId=String(request.data?.bookingId||"");
   const decision=String(request.data?.decision||"").toLowerCase();
   if(!bookingId || bookingId.length>128 || !["approve","reject"].includes(decision)) throw new Error("Invalid cancellation resolution");
+  await rateLimit(request.auth.uid,"resolve_cancel");
   const isAdmin=request.auth.token?.admin===true;
   const ref=db.collection("bookings").doc(bookingId);
   let result;
