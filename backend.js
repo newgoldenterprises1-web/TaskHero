@@ -89,7 +89,18 @@
     },
     async createBooking(data){
       const u=await this.signIn();if(!u)return null;
-      const ref=await this.db.collection("bookings").add({...data,customerId:u.uid,status:data.status||"requested",createdAt:this.firebase.firestore.FieldValue.serverTimestamp(),updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()});
+      const payload={...(data||{})};
+      [
+        "id","customerId","partnerId","partnerAccepted","rejectedPartnerIds",
+        "dispatchedAt","acceptedAt","onTheWayAt","serviceStartedAt",
+        "completedAt","cancelledAt","cancellationRequestedAt",
+        "completionProofUrl","status","createdAt","updatedAt"
+      ].forEach(k=>delete payload[k]);
+      payload.customerId=u.uid;
+      payload.status="requested";
+      payload.createdAt=this.firebase.firestore.FieldValue.serverTimestamp();
+      payload.updatedAt=this.firebase.firestore.FieldValue.serverTimestamp();
+      const ref=await this.db.collection("bookings").add(payload);
       return ref.id;
     },
     async attachBookingPhotos(bookingId,photos){
