@@ -48,7 +48,7 @@ async function findPartner(booking){
     .where("serviceCategories","array-contains",booking.category||"")
     .limit(20).get();
   const candidates=snap.docs.map(d=>({id:d.id,...d.data()}))
-    .filter(p=>p.available!==false)
+    .filter(p=>p.available!==false && !(booking.rejectedPartnerIds||[]).includes(p.id))
     .sort((a,b)=>(Number(a.activeJobs||0)-Number(b.activeJobs||0))||((Number(a.rating||0)*-1)-(Number(b.rating||0)*-1)));
   return candidates[0]||null;
 }
