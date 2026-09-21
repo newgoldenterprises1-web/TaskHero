@@ -153,7 +153,7 @@ exports.resolveSecurityAlert=onCall(CALLABLE_OPTIONS,async(request)=>{
   });
   await auditSecurityEvent({type:"security_alert_resolved",uid:adminUid,alertId});
   return {ok:true,status:"resolved"};
-}
+});
 
 const ACTIVE_STATUSES=new Set(["requested","partner_assigned","partner_on_the_way","service_started"]);
 const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_");
