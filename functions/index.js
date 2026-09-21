@@ -7,22 +7,68 @@ const {getMessaging}=require("firebase-admin/messaging");
 initializeApp();
 const db=getFirestore();
 
+const CALLABLE_OPTIONS={
+  enforceAppCheck: process.env.ENFORCE_APP_CHECK === "true"
+};
+
+const RATE_WINDOWS={
+  support:{max:5,windowMs:10*60*1000},
+  accept:{max:30,windowMs:10*60*1000},
+  reject:{max:30,windowMs:10*60*1000},
+  status:{max:30,windowMs:10*60*1000},
+  cancel:{max:5,windowMs:10*60*1000}
+};
+
+async function rateLimit(uid,action){
+  const cfg=RATE_WINDOWS[action]||{max:20,windowMs:10*60*1000};
+  const id=uid+"_"+action;
+  const ref=db.collection("securityRateLimits").doc(id);
+  const now=Date.now();
+  let allowed=true;
+  await db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    const old=snap.exists?snap.data()||{}:{};
+    const windowStart=Number(old.windowStart||0);
+    const count=Number(old.count||0);
+    if(windowStart && now-windowStart<cfg.windowMs){
+      if(count>=cfg.max){allowed=false;return;}
+      tx.update(ref,{count:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()});
+    }else{
+      tx.set(ref,{uid,action,count:1,windowStart:now,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    }
+  });
+  if(!allowed) throw new Error("Too many requests. Please try again later.");
+}
+
+async function auditSecurityEvent(event){
+  try{
+    await db.collection("securityEvents").add({
+      ...event,
+      createdAt:FieldValue.serverTimestamp()
+    });
+  }catch(err){console.error("Security audit write failed",err);}
+}
+
 const ACTIVE_STATUSES=new Set(["requested","partner_assigned","partner_on_the_way","service_started"]);
 const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_");
 
-exports.health=onCall(()=>({ok:true,service:"near-family-functions"}));
+exports.health=onCall(CALLABLE_OPTIONS,()=>({ok:true,service:"near-family-functions"}));
 
-exports.createSupportTicket=onCall(async(request)=>{
+exports.createSupportTicket=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
+  await rateLimit(request.auth.uid,"support");
   const data=request.data||{};
+  const subject=String(data.subject||"Support request").slice(0,120);
+  const message=String(data.message||"").slice(0,4000);
   const ref=await db.collection("supportTickets").add({
     customerId:request.auth.uid,
-    subject:String(data.subject||"Support request"),
-    message:String(data.message||""),
+    subject,
+    message,
     status:"open",
     createdAt:FieldValue.serverTimestamp(),
     updatedAt:FieldValue.serverTimestamp()
   });
+  await auditSecurityEvent({type:"support_ticket_created",uid:request.auth.uid,ticketId:ref.id});
   return {id:ref.id};
 });
 
@@ -93,10 +139,11 @@ async function requirePartner(request){
   return {uid:request.auth.uid,partner};
 }
 
-exports.acceptBooking=onCall(async(request)=>{
+exports.acceptBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   const {uid}=await requirePartner(request);
   const bookingId=String(request.data?.bookingId||"");
-  if(!bookingId) throw new Error("bookingId required");
+  if(!bookingId || bookingId.length>128) throw new Error("Invalid bookingId");
+  await rateLimit(uid,"accept");
   const ref=db.collection("bookings").doc(bookingId);
   let result;
   await db.runTransaction(async(tx)=>{
@@ -108,13 +155,15 @@ exports.acceptBooking=onCall(async(request)=>{
     tx.update(ref,{partnerAccepted:true,acceptedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
     result={id:snap.id,...b,partnerAccepted:true};
   });
+  await auditSecurityEvent({type:"booking_accepted",uid,bookingId});
   return result;
 });
 
-exports.rejectBooking=onCall(async(request)=>{
+exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   const {uid}=await requirePartner(request);
   const bookingId=String(request.data?.bookingId||"");
-  if(!bookingId) throw new Error("bookingId required");
+  if(!bookingId || bookingId.length>128) throw new Error("Invalid bookingId");
+  await rateLimit(uid,"reject");
   const ref=db.collection("bookings").doc(bookingId);
   const snap=await ref.get();
   if(!snap.exists) throw new Error("Booking not found");
@@ -127,17 +176,20 @@ exports.rejectBooking=onCall(async(request)=>{
   if(partner && partner.id!==uid){
     await ref.update({partnerId:partner.id,status:"partner_assigned",dispatchedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
     await notifyUser(partner.id,"New Near Family job","You have a new service request.",{bookingId,status:"partner_assigned"});
+    await auditSecurityEvent({type:"booking_rejected",uid,bookingId,reassignedTo:partner.id});
     return {ok:true,reassignedTo:partner.id};
   }
+  await auditSecurityEvent({type:"booking_rejected",uid,bookingId,reassignedTo:null});
   return {ok:true,reassignedTo:null};
 });
 
-exports.updateJobStatus=onCall(async(request)=>{
+exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
   const {uid}=await requirePartner(request);
   const bookingId=String(request.data?.bookingId||"");
   const next=normalizeStatus(request.data?.status);
   const allowed={partner_assigned:["partner_on_the_way","cancelled"],partner_on_the_way:["service_started","cancelled"],service_started:["completed","cancelled"]};
-  if(!bookingId || !allowed[next]) throw new Error("Invalid status request");
+  if(!bookingId || bookingId.length>128 || !allowed[next]) throw new Error("Invalid status request");
+  await rateLimit(uid,"status");
   const ref=db.collection("bookings").doc(bookingId);
   let result;
   await db.runTransaction(async(tx)=>{
@@ -150,7 +202,8 @@ exports.updateJobStatus=onCall(async(request)=>{
     if(next==="partner_on_the_way")patch.onTheWayAt=FieldValue.serverTimestamp();
     if(next==="service_started")patch.serviceStartedAt=FieldValue.serverTimestamp();
     if(next==="completed"){
-      if(!request.data?.proofUrl) throw new Error("Completion proof is required");
+      const proofUrl=String(request.data?.proofUrl||"");
+      if(!proofUrl || !(proofUrl.startsWith("https://firebasestorage.googleapis.com/") || proofUrl.startsWith("https://firebasestorage.app/"))) throw new Error("Completion proof must come from Firebase Storage");
       patch.completedAt=FieldValue.serverTimestamp();
       patch.completionProofUrl=String(request.data.proofUrl);
       patch.completionNotes=String(request.data.notes||"");
@@ -159,14 +212,16 @@ exports.updateJobStatus=onCall(async(request)=>{
     tx.update(ref,patch);
     result={ok:true,status:next};
   });
+  await auditSecurityEvent({type:"booking_status_changed",uid,bookingId,status:next});
   return result;
 });
 
 
-exports.requestBookingCancellation=onCall(async(request)=>{
+exports.requestBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
   const bookingId=String(request.data?.bookingId||"");
-  if(!bookingId) throw new Error("bookingId required");
+  if(!bookingId || bookingId.length>128) throw new Error("Invalid bookingId");
+  await rateLimit(request.auth.uid,"cancel");
   const ref=db.collection("bookings").doc(bookingId);
   let partnerId=null;
   await db.runTransaction(async(tx)=>{
@@ -183,5 +238,6 @@ exports.requestBookingCancellation=onCall(async(request)=>{
     });
   });
   if(partnerId) await notifyUser(partnerId,"Near Family — Cancellation requested","The customer has requested cancellation of a booking.",{bookingId,status:"cancellation_requested"});
+  await auditSecurityEvent({type:"booking_cancellation_requested",uid:request.auth.uid,bookingId,partnerId});
   return {ok:true,status:"cancellation_requested"};
 });
