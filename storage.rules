@@ -2,17 +2,37 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /users/{uid}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    function signedIn(){ return request.auth != null; }
+    function admin(){ return signedIn() && request.auth.token.admin == true; }
+    function booking(id){
+      return firestore.get(/databases/(default)/documents/bookings/$(id)).data;
+    }
+    function bookingCustomer(id){
+      return signedIn() && booking(id).customerId == request.auth.uid;
+    }
+    function bookingPartner(id){
+      return signedIn() && booking(id).partnerId == request.auth.uid;
     }
 
+    // Customer-owned uploads, including booking photos.
+    match /users/{uid}/{allPaths=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid
+        && request.resource == null || (signedIn() && request.auth.uid == uid);
+    }
+
+    // Completion proof: only the assigned partner may write; customer, partner,
+    // or admin may read. Uploads are limited to images <= 10 MB.
     match /bookings/{bookingId}/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read: if admin() || bookingCustomer(bookingId) || bookingPartner(bookingId);
+      allow write: if bookingPartner(bookingId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
     }
 
     match /partner-kyc/{uid}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read, write: if signedIn() && request.auth.uid == uid
+        && request.resource.size < 10 * 1024 * 1024;
+      allow read: if admin();
     }
   }
 }
