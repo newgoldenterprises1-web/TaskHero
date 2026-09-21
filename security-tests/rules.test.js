@@ -30,6 +30,13 @@ describe("Near Family security rules",function(){
     await assertFails(getDoc(doc(db,"users","customer-a")));
   });
 
+  it("blocks clients from security telemetry",async()=>{
+    const db=testEnv.authenticatedContext("customer-a").firestore();
+    await assertFails(getDoc(doc(db,"securityEvents","e1")));
+    await assertFails(setDoc(doc(db,"securityEvents","e1"),{type:"tamper"}));
+    await assertFails(getDoc(doc(db,"securityRateLimits","customer-a_create")));
+  });
+
   it("allows a customer to create only their own user profile",async()=>{
     const db=testEnv.authenticatedContext("customer-a").firestore();
     await assertSucceeds(setDoc(doc(db,"users","customer-a"),{
