@@ -69,8 +69,24 @@ function renderApproval(){
 async function saveProfile(){
  try{await NearFamilyBackend.db.collection("partners").doc(partnerUser.uid).set({name:$("pName").value.trim(),phone:$("pPhone").value.trim(),serviceCategories:$("pServices").value.split(",").map(x=>x.trim()).filter(Boolean),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});$("msg").textContent="Profile saved.";renderApproval();}catch(e){$("msg").textContent=e.message||String(e);}
 }
+async function updatePartnerLocation(){
+ if(!navigator.geolocation)return;
+ return new Promise(resolve=>navigator.geolocation.getCurrentPosition(async pos=>{
+   try{
+     await NearFamilyBackend.db.collection("partners").doc(partnerUser.uid).set({
+       partnerLocation:{lat:Number(pos.coords.latitude.toFixed(6)),lng:Number(pos.coords.longitude.toFixed(6)),accuracy:Math.round(pos.coords.accuracy||0),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},
+       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+     },{merge:true});
+   }catch(e){console.warn("Partner location update failed",e)}
+   resolve();
+ },()=>resolve(),{enableHighAccuracy:true,timeout:9000,maximumAge:300000})); 
+}
 async function togglePartner(field){
- try{await NearFamilyBackend.db.collection("partners").doc(partnerUser.uid).set({[field]:!Boolean(partnerData[field]),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});}catch(e){$("msg").textContent=e.message||String(e);}
+ try{
+   const next=!Boolean(partnerData[field]);
+   if(field==="online" && next) await updatePartnerLocation();
+   await NearFamilyBackend.db.collection("partners").doc(partnerUser.uid).set({[field]:next,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+ }catch(e){$("msg").textContent=e.message||String(e);}
 }
 function requestCard(b){
  return '<div class="border border-[#dcefe7] rounded-2xl p-4"><div class="flex justify-between gap-3"><div><b>'+esc(b.serviceName||b.service||b.category||"Service request")+'</b><div class="text-xs text-slate-500 mt-1">'+esc(b.date||"")+' '+esc(b.time||"")+'</div></div><span class="'+statusClass(b.status)+'">'+esc(pretty(b.status))+'</span></div><div class="text-sm mt-3">'+esc(b.address||b.location||"Location not provided")+'</div><div class="text-xs text-slate-500 mt-1">'+esc(b.instructions||"No special instructions")+'</div><div class="flex gap-2 mt-4">'+(b.status==="partner_assigned"&&!b.partnerAccepted?'<button onclick="acceptJob(\''+b.id+'\')" class="px-4 py-2 rounded-xl bg-[#176b5b] text-white text-xs font-bold">Accept</button><button onclick="rejectJob(\''+b.id+'\')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">Reject</button>':'<button onclick="openActive(\''+b.id+'\')" class="px-4 py-2 rounded-xl bg-[#e9f6f1] text-[#176b5b] text-xs font-bold">Open Job</button>')+'</div></div>';
