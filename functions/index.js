@@ -329,15 +329,33 @@ async function notifyUser(uid,title,body,data={}){
   }
 }
 
+function distanceKm(a,b){
+  const lat1=Number(a?.lat),lon1=Number(a?.lng),lat2=Number(b?.lat),lon2=Number(b?.lng);
+  if(![lat1,lon1,lat2,lon2].every(Number.isFinite)) return null;
+  const R=6371,rad=Math.PI/180;
+  const dLat=(lat2-lat1)*rad,dLon=(lon2-lon1)*rad;
+  const h=Math.sin(dLat/2)**2+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+function partnerLocation(p){
+  return p.partnerLocation||p.location||null;
+}
 async function findPartner(booking){
   const snap=await db.collection("partners")
     .where("online","==",true)
     .where("approved","==",true)
     .where("serviceCategories","array-contains",booking.category||"")
-    .limit(20).get();
+    .limit(50).get();
   const candidates=snap.docs.map(d=>({id:d.id,...d.data()}))
     .filter(p=>p.available!==false && !(booking.rejectedPartnerIds||[]).includes(p.id))
-    .sort((a,b)=>(Number(a.activeJobs||0)-Number(b.activeJobs||0))||((Number(a.rating||0)*-1)-(Number(b.rating||0)*-1)));
+    .map(p=>({...p,distanceKm:distanceKm(booking.location,partnerLocation(p))}))
+    .sort((a,b)=>{
+      const ad=a.distanceKm===null?Number.POSITIVE_INFINITY:a.distanceKm;
+      const bd=b.distanceKm===null?Number.POSITIVE_INFINITY:b.distanceKm;
+      return (ad-bd)
+        || (Number(a.activeJobs||0)-Number(b.activeJobs||0))
+        || (Number(b.rating||0)-Number(a.rating||0));
+    });
   return candidates[0]||null;
 }
 
