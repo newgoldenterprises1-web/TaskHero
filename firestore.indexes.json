@@ -4,42 +4,25 @@
       "collectionGroup": "bookings",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "customerId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        {"fieldPath":"customerId","order":"ASCENDING"},
+        {"fieldPath":"createdAt","order":"DESCENDING"}
       ]
     },
     {
       "collectionGroup": "bookings",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "partnerId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        {"fieldPath":"partnerId","order":"ASCENDING"},
+        {"fieldPath":"createdAt","order":"DESCENDING"}
       ]
     },
     {
-      "collectionGroup": "securityEvents",
+      "collectionGroup": "partners",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        {"fieldPath":"online","order":"ASCENDING"},
+        {"fieldPath":"approved","order":"ASCENDING"},
+        {"fieldPath":"serviceCategories","arrayConfig":"CONTAINS"}
       ]
     }
   ],
