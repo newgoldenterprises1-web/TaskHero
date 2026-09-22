@@ -502,7 +502,7 @@ exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
       const partnerSnap=await tx.get(partnerRef);
       const liveBooking=bookingSnap.data()||{};
       const livePartner=partnerSnap.data()||{};
-      if(liveBooking.partnerId || livePartner.currentBookingId) throw new Error("Reassignment race detected");
+      if(liveBooking.partnerId || livePartner.currentBookingId || livePartner.approved!==true || livePartner.online!==true || livePartner.available===false)return;
       tx.update(bookingRef,{partnerId:partner.id,status:"partner_assigned",dispatchedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
       tx.update(partnerRef,{currentBookingId:bookingId,updatedAt:FieldValue.serverTimestamp()});
     });
