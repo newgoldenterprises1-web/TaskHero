@@ -155,7 +155,7 @@
     async listAddresses(){
       const u=await this.signIn();if(!u)return [];
       const snap=await this.db.collection("addresses").where("customerId","==",u.uid).orderBy("createdAt","desc").limit(50).get();
-      return snap.docs.map(d=>d.data().address).filter(Boolean);
+      return snap.docs.map(d=>({id:d.id,...d.data()}));
     },
     onForegroundMessage(callback){
       if(!this.ready||!this.firebase?.messaging)return ()=>{};
