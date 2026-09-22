@@ -340,15 +340,25 @@ function distanceKm(a,b){
 function partnerLocation(p){
   return p.partnerLocation||p.location||null;
 }
+function partnerHasFreshLocation(p,maxAgeMs=30*60*1000){
+  const loc=partnerLocation(p);
+  const updated=loc?.updatedAt;
+  if(!updated?.toMillis) return false;
+  return Date.now()-updated.toMillis() <= maxAgeMs;
+}
 async function findPartner(booking){
   const snap=await db.collection("partners")
     .where("online","==",true)
     .where("approved","==",true)
     .where("serviceCategories","array-contains",booking.category||"")
-    .limit(50).get();
+    .limit(100).get();
   const candidates=snap.docs.map(d=>({id:d.id,...d.data()}))
-    .filter(p=>p.available!==false && !(booking.rejectedPartnerIds||[]).includes(p.id))
-    .map(p=>({...p,distanceKm:distanceKm(booking.location,partnerLocation(p))}))
+    .filter(p=>p.available!==false
+      && !p.currentBookingId
+      && !(booking.rejectedPartnerIds||[]).includes(p.id))
+    .map(p=>({...p,distanceKm:distanceKm(booking.location,partnerLocation(p)),locationFresh:partnerHasFreshLocation(p)}))
+    .sort((a,b)=>{
+      if(a.locationFresh!==b.locationFresh) return a.locationFresh?-1:1;
     .sort((a,b)=>{
       const ad=a.distanceKm===null?Number.POSITIVE_INFINITY:a.distanceKm;
       const bd=b.distanceKm===null?Number.POSITIVE_INFINITY:b.distanceKm;
@@ -382,6 +392,10 @@ exports.onBookingCreated=onDocumentCreated("bookings/{bookingId}",async(event)=>
         dispatchedAt:FieldValue.serverTimestamp(),
         updatedAt:FieldValue.serverTimestamp()
       });
+      tx.update(partnerRef,{
+        currentBookingId:event.params.bookingId,
+        updatedAt:FieldValue.serverTimestamp()
+      });
       assigned=true;
     });
     if(assigned){
@@ -412,7 +426,7 @@ async function requirePartner(request){
   if(!snap.exists) throw new Error("Partner profile not found");
   const partner=snap.data()||{};
   if(partner.approved!==true) throw new Error("Partner is not approved yet");
-  if(partner.online!==true || partner.available===false) throw new Error("Partner is not currently available");
+  if(partner.online!==true) throw new Error("Partner is not currently online");
   return {uid:request.auth.uid,partner};
 }
 
@@ -432,7 +446,7 @@ exports.acceptBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
     const partnerRef=db.collection("partners").doc(uid);
     const partnerSnap=await tx.get(partnerRef);
     const partner=partnerSnap.data()||{};
-    if(partner.approved!==true || partner.online!==true || partner.available===false) throw new Error("Partner is not currently available");
+    if(partner.approved!==true || partner.online!==true || partner.currentBookingId!==bookingId) throw new Error("This booking is no longer assigned to this partner");
     tx.update(ref,{partnerAccepted:true,acceptedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
     tx.update(partnerRef,{activeJobs:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()});
     result={id:snap.id,...b,partnerAccepted:true};
@@ -453,10 +467,20 @@ exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
   if(!["partner_assigned","requested","searching_partner"].includes(b.status) || b.partnerAccepted===true) throw new Error("Booking cannot be rejected now");
   await ref.update({partnerId:FieldValue.delete(),partnerAccepted:false,status:"searching_partner",rejectedPartnerIds:FieldValue.arrayUnion(uid),updatedAt:FieldValue.serverTimestamp()});
+  await db.collection("partners").doc(uid).set({currentBookingId:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
   const updated=(await ref.get()).data()||{};
   const partner=await findPartner(updated);
   if(partner && partner.id!==uid){
-    await ref.update({partnerId:partner.id,status:"partner_assigned",dispatchedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+    await db.runTransaction(async(tx)=>{
+      const bookingRef=db.collection("bookings").doc(bookingId);
+      const partnerRef=db.collection("partners").doc(partner.id);
+      const [bookingSnap,partnerSnap]=await Promise.all([tx.get(bookingRef),tx.get(partnerRef)]);
+      const liveBooking=bookingSnap.data()||{};
+      const livePartner=partnerSnap.data()||{};
+      if(liveBooking.partnerId || livePartner.currentBookingId) throw new Error("Reassignment race detected");
+      tx.update(bookingRef,{partnerId:partner.id,status:"partner_assigned",dispatchedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+      tx.update(partnerRef,{currentBookingId:bookingId,updatedAt:FieldValue.serverTimestamp()});
+    });
     await notifyUser(partner.id,"New Near Family job","You have a new service request.",{bookingId,status:"partner_assigned"});
     await auditSecurityEvent({type:"booking_rejected",uid,bookingId,reassignedTo:partner.id});
     return {ok:true,reassignedTo:partner.id};
@@ -501,6 +525,7 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
       const currentJobs=Math.max(0,Number(partnerSnap.data()?.activeJobs||0));
       tx.update(partnerRef,{
         activeJobs:Math.max(0,currentJobs-1),
+        currentBookingId:FieldValue.delete(),
         updatedAt:FieldValue.serverTimestamp()
       });
     }
@@ -549,7 +574,7 @@ exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
       const partnerRef=db.collection("partners").doc(b.partnerId);
       const partnerSnap=await tx.get(partnerRef);
       const jobs=Math.max(0,Number(partnerSnap.data()?.activeJobs||0));
-      tx.update(partnerRef,{activeJobs:Math.max(0,jobs-1),updatedAt:FieldValue.serverTimestamp()});
+      tx.update(partnerRef,{activeJobs:Math.max(0,jobs-1),currentBookingId:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()});
     }
     result={status:"cancelled"};
   });
