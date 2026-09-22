@@ -89,6 +89,9 @@ async function login(){
         if(code.length!==6)return toast('Please enter the 6-digit OTP.');
         const u=await NearFamilyBackend.confirmPhoneCode(code);
         if(!u)return toast('OTP verification failed.');
+        let cloudUser=null;
+        try{const snap=await NearFamilyBackend.db.collection('users').doc(u.uid).get();if(snap.exists)cloudUser=snap.data()||null}catch(e){console.warn('Unable to load customer profile',e)}
+        state.user={name:cloudUser?.name||'Near Family Customer',phone:cloudUser?.phone||phone,uid:u.uid};
       }else{
         await NearFamilyBackend.startPhoneVerification(phone,'loginRecaptcha');
         $('loginOtp').classList.remove('hidden');$('loginBtn').textContent='Verify OTP';$('loginPhone').disabled=true;
@@ -110,6 +113,7 @@ async function signup(){
         if(code.length!==6)return toast('Please enter the 6-digit OTP.');
         const u=await NearFamilyBackend.confirmPhoneCode(code);
         if(!u)return toast('OTP verification failed.');
+        state.user={name,phone,uid:u.uid};
       }else{
         await NearFamilyBackend.startPhoneVerification(phone,'signupRecaptcha');
         $('signupOtp').classList.remove('hidden');$('signupBtn').textContent='Verify OTP';$('signupPhone').disabled=true;
@@ -129,11 +133,11 @@ async function hydrateCustomerCloudData(){
       NearFamilyBackend.listAddresses(),
       NearFamilyBackend.listBookings()
     ]);
-    if(Array.isArray(families)&&families.length)state.families=families.map(f=>({
+    if(Array.isArray(families))state.families=families.map(f=>({
       id:f.id,name:f.name||'',relationship:f.relationship||'Family',phone:f.phone||'',address:f.address||''
     }));
-    if(Array.isArray(addresses)&&addresses.length)state.addresses=[...new Set(addresses.filter(Boolean))];
-    if(Array.isArray(bookings)&&bookings.length)state.bookings=bookings.map(b=>({
+    if(Array.isArray(addresses))state.addresses=addresses.map(a=>typeof a==='string'?a:{id:a.id,address:a.address||''}).filter(a=>typeof a==='string'?a.trim():a.address.trim());
+    if(Array.isArray(bookings))state.bookings=bookings.map(b=>({
       ...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():(b.createdAt||new Date().toISOString()),
       updatedAt:b.updatedAt?.toDate?b.updatedAt.toDate().toISOString():b.updatedAt
     }));
