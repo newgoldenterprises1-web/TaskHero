@@ -359,7 +359,6 @@ async function findPartner(booking){
     .map(p=>({...p,distanceKm:distanceKm(booking.location,partnerLocation(p)),locationFresh:partnerHasFreshLocation(p)}))
     .sort((a,b)=>{
       if(a.locationFresh!==b.locationFresh) return a.locationFresh?-1:1;
-    .sort((a,b)=>{
       const ad=a.distanceKm===null?Number.POSITIVE_INFINITY:a.distanceKm;
       const bd=b.distanceKm===null?Number.POSITIVE_INFINITY:b.distanceKm;
       return (ad-bd)
@@ -474,7 +473,8 @@ exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
     await db.runTransaction(async(tx)=>{
       const bookingRef=db.collection("bookings").doc(bookingId);
       const partnerRef=db.collection("partners").doc(partner.id);
-      const [bookingSnap,partnerSnap]=await Promise.all([tx.get(bookingRef),tx.get(partnerRef)]);
+      const bookingSnap=await tx.get(bookingRef);
+      const partnerSnap=await tx.get(partnerRef);
       const liveBooking=bookingSnap.data()||{};
       const livePartner=partnerSnap.data()||{};
       if(liveBooking.partnerId || livePartner.currentBookingId) throw new Error("Reassignment race detected");
