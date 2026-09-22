@@ -99,7 +99,8 @@ async function login(){
       }
     }catch(e){console.warn(e);return toast('OTP could not be sent. Check Firebase Phone Auth setup.')}
   }
-  state.user={name:'Near Family Customer',phone};save();
+  if(!state.user?.uid)state.user={name:'Near Family Customer',phone};
+  save();
   if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name:state.user.name,phone});
   startApp();
 }
@@ -121,8 +122,9 @@ async function signup(){
       }
     }catch(e){console.warn(e);return toast('OTP could not be sent. Check Firebase Phone Auth setup.')}
   }
-  state.user={name,phone};save();
-  if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name,phone});
+  if(!state.user?.uid)state.user={name,phone};
+  save();
+  if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name:state.user.name,phone});
   startApp();
 }
 async function hydrateCustomerCloudData(){
