@@ -166,6 +166,64 @@ exports.resolveSecurityAlert=onCall(CALLABLE_OPTIONS,async(request)=>{
   return {ok:true,status:"resolved"};
 });
 
+exports.adminListOperations=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const adminUid=requireAdmin(request);
+  const limitCount=Math.min(100,Math.max(1,Number(request.data?.limit||50)));
+  const [bookingsSnap,partnersSnap,supportSnap]=await Promise.all([
+    db.collection("bookings").orderBy("createdAt","desc").limit(limitCount).get(),
+    db.collection("partners").orderBy("createdAt","desc").limit(limitCount).get(),
+    db.collection("supportTickets").orderBy("createdAt","desc").limit(limitCount).get()
+  ]);
+  const bookings=bookingsSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const partners=partnersSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const supportTickets=supportSnap.docs.map(d=>({id:d.id,...d.data()}));
+  return {
+    adminUid,
+    bookings,
+    partners,
+    supportTickets,
+    stats:{
+      bookings:bookings.length,
+      activeBookings:bookings.filter(b=>["requested","searching_partner","partner_assigned","partner_on_the_way","service_started"].includes(normalizeStatus(b.status))).length,
+      completed:bookings.filter(b=>normalizeStatus(b.status)==="completed").length,
+      partners:partners.length,
+      pendingPartners:partners.filter(p=>p.approved!==true).length,
+      openSupport:supportTickets.filter(t=>t.status==="open").length
+    }
+  };
+});
+
+exports.setPartnerApproval=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const adminUid=requireAdmin(request);
+  const partnerId=String(request.data?.partnerId||"");
+  const decision=String(request.data?.decision||"").toLowerCase();
+  const note=String(request.data?.note||"").trim().slice(0,1000);
+  if(!partnerId || partnerId.length>128 || !["approve","reject","suspend"].includes(decision)) throw new Error("Invalid partner approval request");
+  const ref=db.collection("partners").doc(partnerId);
+  const snap=await ref.get();
+  if(!snap.exists) throw new Error("Partner not found");
+  const patch={
+    approved:decision==="approve",
+    approvalStatus:decision==="approve"?"approved":decision==="suspend"?"suspended":"rejected",
+    approvalNote:note,
+    reviewedBy:adminUid,
+    reviewedAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp()
+  };
+  if(decision!=="approve"){patch.online=false;patch.available=false;}
+  await ref.update(patch);
+  await db.collection("users").doc(partnerId).set({
+    partnerApprovalStatus:patch.approvalStatus,
+    partnerApprovalNote:note,
+    updatedAt:FieldValue.serverTimestamp()
+  },{merge:true});
+  await notifyUser(partnerId,"Near Family — Partner application update",
+    decision==="approve"?"Your partner account has been approved.":"Your partner account status was updated by Near Family operations.",
+    {partnerId,status:patch.approvalStatus});
+  await auditSecurityEvent({type:"partner_approval_changed",uid:adminUid,partnerId,decision});
+  return {ok:true,partnerId,status:patch.approvalStatus};
+});
+
 const ACTIVE_STATUSES=new Set(["requested","partner_assigned","partner_on_the_way","service_started"]);
 const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_");
 
