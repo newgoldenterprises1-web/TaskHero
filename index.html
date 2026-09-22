@@ -121,7 +121,16 @@ async function signup(){
   if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name,phone});
   startApp();
 }
-function startApp(){$('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');$('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';$('profileName').textContent=state.user?.name||'Customer';$('profilePhone').textContent=state.user?.phone||'';renderAll();requestLocation()}
+async function startApp(){
+  $('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');
+  $('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';
+  $('profileName').textContent=state.user?.name||'Customer';$('profilePhone').textContent=state.user?.phone||'';
+  renderAll();requestLocation();
+  if(window.NearFamilyBackend?.ready&&state.user){
+    try{await NearFamilyBackend.saveUser({name:state.user.name,phone:state.user.phone});}catch(e){console.warn('User cloud sync unavailable',e)}
+    await syncCustomerData();await syncCloudBookings();subscribeToBookingUpdates();await setupCustomerPushNotifications();
+  }
+}
 async function logout(){
   if(state.unsubscribeBookings){state.unsubscribeBookings();state.unsubscribeBookings=null}
   if(window.NearFamilyBackend?.ready){
