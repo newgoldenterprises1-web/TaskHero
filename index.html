@@ -121,6 +121,25 @@ async function signup(){
   if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name,phone});
   startApp();
 }
+async function hydrateCustomerCloudData(){
+  if(!window.NearFamilyBackend?.ready)return;
+  try{
+    const [families,addresses,bookings]=await Promise.all([
+      NearFamilyBackend.listFamilyMembers(),
+      NearFamilyBackend.listAddresses(),
+      NearFamilyBackend.listBookings()
+    ]);
+    if(Array.isArray(families)&&families.length)state.families=families.map(f=>({
+      id:f.id,name:f.name||'',relationship:f.relationship||'Family',phone:f.phone||'',address:f.address||''
+    }));
+    if(Array.isArray(addresses)&&addresses.length)state.addresses=[...new Set(addresses.filter(Boolean))];
+    if(Array.isArray(bookings)&&bookings.length)state.bookings=bookings.map(b=>({
+      ...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():(b.createdAt||new Date().toISOString()),
+      updatedAt:b.updatedAt?.toDate?b.updatedAt.toDate().toISOString():b.updatedAt
+    }));
+    save();renderAll();
+  }catch(e){console.warn('Customer cloud hydration unavailable; local data retained',e)}
+}
 async function startApp(){
   $('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');
   $('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';
@@ -128,7 +147,7 @@ async function startApp(){
   renderAll();requestLocation();
   if(window.NearFamilyBackend?.ready&&state.user){
     try{await NearFamilyBackend.saveUser({name:state.user.name,phone:state.user.phone});}catch(e){console.warn('User cloud sync unavailable',e)}
-    await syncCustomerData();await syncCloudBookings();subscribeToBookingUpdates();await setupCustomerPushNotifications();
+    await hydrateCustomerCloudData();subscribeToBookingUpdates();await setupCustomerPushNotifications();
   }
 }
 async function logout(){
