@@ -70,15 +70,31 @@
       await this.db.collection("users").doc(u.uid).set({...data,updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
       return u.uid;
     },
-    async saveFamilyMember(data){
+    async saveFamilyMember(data,id){
       const u=await this.signIn();if(!u)return null;
-      const ref=await this.db.collection("familyMembers").add({...data,customerId:u.uid,createdAt:this.firebase.firestore.FieldValue.serverTimestamp(),updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()});
+      const payload={name:String(data?.name||"").trim(),relationship:String(data?.relationship||"Family").trim(),phone:String(data?.phone||"").trim(),address:String(data?.address||"").trim(),notes:String(data?.notes||"").trim(),updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()};
+      if(!payload.name)return null;
+      if(id){
+        await this.db.collection("familyMembers").doc(id).update(payload);
+        return id;
+      }
+      const ref=await this.db.collection("familyMembers").add({...payload,customerId:u.uid,createdAt:this.firebase.firestore.FieldValue.serverTimestamp()});
       return ref.id;
     },
-    async saveAddress(address){
+    async deleteFamilyMember(id){
+      const u=await this.signIn();if(!u||!id)return false;
+      await this.db.collection("familyMembers").doc(id).delete();return true;
+    },
+    async saveAddress(address,id){
       const u=await this.signIn();if(!u)return null;
-      const ref=await this.db.collection("addresses").add({customerId:u.uid,address:String(address),createdAt:this.firebase.firestore.FieldValue.serverTimestamp(),updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()});
+      const value=String(address||"").trim();if(!value)return null;
+      if(id){await this.db.collection("addresses").doc(id).update({address:value,updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()});return id;}
+      const ref=await this.db.collection("addresses").add({customerId:u.uid,address:value,createdAt:this.firebase.firestore.FieldValue.serverTimestamp(),updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()});
       return ref.id;
+    },
+    async deleteAddress(id){
+      const u=await this.signIn();if(!u||!id)return false;
+      await this.db.collection("addresses").doc(id).delete();return true;
     },
     async uploadBookingPhotos(bookingId,files){
       const u=await this.signIn();if(!u||!this.storage||!files?.length)return [];
