@@ -134,3 +134,25 @@ Required rules:
 5. `customer_app/lib/main.dart` must remain a lightweight entry point.
 6. The root `customer/` HTML/CSS/JS frontend is not the native Customer mobile application.
 7. Do not merge all Customer mobile code into a single Dart file.
+
+
+## Near Family customer UI design lock
+
+Status: LOCKED
+
+The Customer mobile Home UI visual direction is now fixed unless the user explicitly requests a design change.
+
+Locked direction:
+- Premium, friendly, modern mobile marketplace presentation.
+- Near Family brand palette: Deep Navy, Sunset Peach, Warm Beige, Earth Brown, with balanced 60-30-10 usage.
+- Header: Near Family logo/wordmark, tagline, current location, notifications, and profile.
+- Clean search bar below the header.
+- Two equal 50/50 hero cards:
+  - Popular Services: warm peach/beige presentation with human/family assistance imagery.
+  - Community Bulk Orders: neighbourhood/community imagery with a stronger navy/teal treatment and clear bulk-quote CTA.
+- Popular Services below the hero cards in a clean multi-card service grid.
+- Trust highlights for verified providers, family-first service, and 24/7 support.
+- Community/neighbourhood promotional content may appear below the core service content.
+- Five-item bottom navigation: Home, Bookings, Bulk Orders, Family, Profile.
+- Imagery should remain high-quality, relevant, natural-looking, and consistent with the Near Family brand.
+- Do not redesign the home screen or change the visual direction unless the user explicitly asks for a UI/design change.
