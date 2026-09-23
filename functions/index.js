@@ -668,18 +668,22 @@ exports.onBookingUpdated=onDocumentUpdated("bookings/{bookingId}",async(event)=>
 });
 
 
-async function requirePartner(request){
+async function requirePartnerBase(request){
   if(!request.auth) throw new Error("Authentication required");
   const snap=await db.collection("partners").doc(request.auth.uid).get();
   if(!snap.exists) throw new Error("Partner profile not found");
   const partner=snap.data()||{};
-  if(partner.approved!==true) throw new Error("Partner is not approved yet");
-  if(partner.online!==true) throw new Error("Partner is not currently online");
   return {uid:request.auth.uid,partner};
+}
+async function requirePartner(request){
+  const result=await requirePartnerBase(request);
+  if(result.partner.approved!==true) throw new Error("Partner is not approved yet");
+  if(result.partner.online!==true) throw new Error("Partner is not currently online");
+  return result;
 }
 
 exports.updatePartnerProfile=onCall(CALLABLE_OPTIONS,async(request)=>{
-  const {uid}=await requirePartner(request);
+  const {uid}=await requirePartnerBase(request);
   const data=request.data||{};
   const name=String(data.name||"").trim();
   const phone=String(data.phone||"").trim();
@@ -728,10 +732,11 @@ exports.updatePartnerAvailability=onCall(CALLABLE_OPTIONS,async(request)=>{
 });
 
 exports.updatePartnerLocation=onCall(CALLABLE_OPTIONS,async(request)=>{
-  const {uid}=await requirePartner(request);
+  const {uid,partner}=await requirePartnerBase(request);
   const lat=Number(request.data?.lat),lng=Number(request.data?.lng),accuracy=Number(request.data?.accuracy||0);
   if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180||!Number.isFinite(accuracy)||accuracy<0||accuracy>10000) throw new Error("Invalid partner location");
   const ref=db.collection("partners").doc(uid);
+  if(partner.approved!==true) throw new Error("Partner is not approved yet");
   await ref.update({
     partnerLocation:{lat:Number(lat.toFixed(6)),lng:Number(lng.toFixed(6)),accuracy:Math.round(accuracy),updatedAt:FieldValue.serverTimestamp()},
     updatedAt:FieldValue.serverTimestamp()
