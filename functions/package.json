@@ -9,6 +9,6 @@
     "firebase-functions": "^6.1.0"
   },
   "scripts": {
-    "test": "node test/lifecycle.test.js"
+    "test": "node test/lifecycle.test.js && node test/booking-validation.test.js"
   }
 }
