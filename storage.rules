@@ -15,12 +15,15 @@ service firebase.storage {
       allow write: if signedIn() && request.auth.uid == uid
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*')
-        && bookingCustomer(bookingId);
+        && bookingCustomer(bookingId)
+        && booking(bookingId).status != 'completed'
+        && booking(bookingId).status != 'cancelled';
     }
 
     match /bookings/{bookingId}/completion/{allPaths=**} {
       allow read: if admin() || bookingCustomer(bookingId) || bookingPartner(bookingId);
       allow write: if bookingPartner(bookingId)
+        && booking(bookingId).status == 'service_started'
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
