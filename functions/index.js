@@ -647,6 +647,15 @@ async function tryRedispatchBooking(bookingId,excludedPartnerId=null){
       status:"searching_partner",
       updatedAt:FieldValue.serverTimestamp()
     });
+
+    if(booking.customerId){
+      await notifyUser(
+        booking.customerId,
+        "Near Family — Finding a new partner",
+        "Your previous partner is unavailable. We're finding another available verified partner.",
+        {bookingId,status:"searching_partner"}
+      );
+    }
     return null;
   }
 
@@ -666,12 +675,14 @@ async function tryRedispatchBooking(bookingId,excludedPartnerId=null){
     return assignedPartner.id;
   }
 
-  await notifyUser(
-    booking.customerId,
-    "Near Family — Finding a new partner",
-    "Your previous partner is unavailable. We're finding another available verified partner.",
-    {bookingId,status:"searching_partner"}
-  );
+  if(booking.customerId){
+    await notifyUser(
+      booking.customerId,
+      "Near Family — Finding a new partner",
+      "Your previous partner is unavailable. We're finding another available verified partner.",
+      {bookingId,status:"searching_partner"}
+    );
+  }
   return null;
 }
 
