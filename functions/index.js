@@ -407,7 +407,8 @@ async function dispatchPendingBookingForPartner(partnerId){
   const partner=partnerSnap.data()||{};
   if(partner.approved!==true || partner.online!==true || partner.available!==true || partner.currentBookingId)return null;
   const categories=Array.isArray(partner.serviceCategories)?partner.serviceCategories.filter(Boolean).slice(0,30):[];
-  if(!categories.length)return null;
+  const skills=Array.isArray(partner.skills)?partner.skills.filter(Boolean).slice(0,30):[];
+  if(!categories.length&&!skills.length)return null;
 
   const pendingSnap=await db.collection("bookings")
     .where("status","==","searching_partner")
@@ -416,7 +417,8 @@ async function dispatchPendingBookingForPartner(partnerId){
 
   for(const doc of pendingSnap.docs){
     const booking=doc.data()||{};
-    if(booking.partnerId || !categories.includes(String(booking.category||"")) ||
+    if(booking.partnerId ||
+       !(categories.includes(String(booking.category||"")) || skills.includes(String(booking.category||""))) ||
        (booking.rejectedPartnerIds||[]).includes(partnerId)) continue;
 
     let assigned=false;
@@ -580,7 +582,9 @@ exports.acceptBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
     const partnerRef=db.collection("partners").doc(uid);
     const partnerSnap=await tx.get(partnerRef);
     const partner=partnerSnap.data()||{};
-    if(partner.approved!==true || partner.online!==true || partner.currentBookingId!==bookingId) throw new Error("This booking is no longer assigned to this partner");
+    if(partner.approved!==true || partner.online!==true || partner.available!==true || partner.currentBookingId!==bookingId) throw new Error("This booking is no longer assigned to this partner");
+    const acceptDistance=distanceKm(b.location,partnerLocation(partner));
+    if(!partnerMatchesServiceArea(partner,b,acceptDistance)) throw new Error("This booking is outside your service area");
     tx.update(ref,{partnerAccepted:true,acceptedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
     tx.update(partnerRef,{activeJobs:FieldValue.increment(1),updatedAt:FieldValue.serverTimestamp()});
     result={id:snap.id,...b,partnerAccepted:true};
@@ -595,35 +599,44 @@ exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!bookingId || bookingId.length>128) throw new Error("Invalid bookingId");
   await rateLimit(uid,"reject");
   const ref=db.collection("bookings").doc(bookingId);
-  const snap=await ref.get();
-  if(!snap.exists) throw new Error("Booking not found");
-  const b=snap.data()||{};
-  if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
-  if(!["partner_assigned","requested","searching_partner"].includes(b.status) || b.partnerAccepted===true) throw new Error("Booking cannot be rejected now");
-  await ref.update({partnerId:FieldValue.delete(),partnerAccepted:false,status:"searching_partner",rejectedPartnerIds:FieldValue.arrayUnion(uid),updatedAt:FieldValue.serverTimestamp()});
-  await db.collection("partners").doc(uid).set({currentBookingId:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
-  const updated=(await ref.get()).data()||{};
-  const partner=await findPartner(updated);
-  if(partner && partner.id!==uid){
-    await db.runTransaction(async(tx)=>{
-      const bookingRef=db.collection("bookings").doc(bookingId);
-      const partnerRef=db.collection("partners").doc(partner.id);
-      const bookingSnap=await tx.get(bookingRef);
-      const partnerSnap=await tx.get(partnerRef);
-      const liveBooking=bookingSnap.data()||{};
-      const livePartner=partnerSnap.data()||{};
-      if(liveBooking.partnerId || livePartner.currentBookingId || livePartner.approved!==true || livePartner.online!==true || livePartner.available!==true)return;
-      const reassignmentDistance=distanceKm(liveBooking.location,partnerLocation(livePartner));
-      if(!partnerMatchesServiceArea(livePartner,liveBooking,reassignmentDistance))return;
-      tx.update(bookingRef,{partnerId:partner.id,status:"partner_assigned",dispatchedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
-      tx.update(partnerRef,{currentBookingId:bookingId,updatedAt:FieldValue.serverTimestamp()});
+  let result=null;
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists) throw new Error("Booking not found");
+    const b=snap.data()||{};
+    if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
+    if(!["partner_assigned","requested","searching_partner"].includes(b.status) || b.partnerAccepted===true) throw new Error("Booking cannot be rejected now");
+    const oldPartnerRef=db.collection("partners").doc(uid);
+    const oldPartnerSnap=await tx.get(oldPartnerRef);
+    const oldPartner=oldPartnerSnap.data()||{};
+    tx.update(ref,{
+      partnerId:FieldValue.delete(),
+      partnerAccepted:false,
+      status:"searching_partner",
+      rejectedPartnerIds:FieldValue.arrayUnion(uid),
+      updatedAt:FieldValue.serverTimestamp()
     });
-    await notifyUser(partner.id,"New Near Family job","You have a new service request.",{bookingId,status:"partner_assigned"});
-    await auditSecurityEvent({type:"booking_rejected",uid,bookingId,reassignedTo:partner.id});
-    return {ok:true,reassignedTo:partner.id};
+    tx.update(oldPartnerRef,{currentBookingId:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()});
+    const candidates=await findPartners(b);
+    const next=candidates.find(p=>p.id!==uid && !(b.rejectedPartnerIds||[]).includes(p.id));
+    if(next){
+      const nextRef=db.collection("partners").doc(next.id);
+      const nextSnap=await tx.get(nextRef);
+      const nextPartner=nextSnap.data()||{};
+      const d=distanceKm(b.location,partnerLocation(nextPartner));
+      if(nextPartner.approved===true && nextPartner.online===true && nextPartner.available===true &&
+         !nextPartner.currentBookingId && partnerMatchesServiceArea(nextPartner,b,d)){
+        tx.update(ref,{partnerId:next.id,status:"partner_assigned",dispatchedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+        tx.update(nextRef,{currentBookingId:bookingId,updatedAt:FieldValue.serverTimestamp()});
+        result={ok:true,reassignedTo:next.id};
+      }
+    }
+  });
+  if(result?.reassignedTo){
+    await notifyUser(result.reassignedTo,"New Near Family job","You have a new service request.",{bookingId,status:"partner_assigned"});
   }
-  await auditSecurityEvent({type:"booking_rejected",uid,bookingId,reassignedTo:null});
-  return {ok:true,reassignedTo:null};
+  await auditSecurityEvent({type:"booking_rejected",uid,bookingId,reassignedTo:result?.reassignedTo||null});
+  return result||{ok:true,reassignedTo:null};
 });
 
 exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
