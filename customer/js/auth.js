@@ -69,7 +69,6 @@ async function hydrateCustomerCloudData(){
     save();renderAll();
   }catch(e){console.warn('Customer cloud hydration unavailable; local data retained',e)}
 }
-async
 
 async function startApp(){
   $('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');
