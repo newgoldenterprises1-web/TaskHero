@@ -19,4 +19,20 @@ async function openSupport(){
   window.location.href='mailto:support@nearfamily.in?subject='+subject+'&body='+body;
 }
 
-function renderAddresses(){const el=$('addressList');if(!el)return;el.innerHTML=state.addresses.length?state.addresses.map((item,i)=>{const label=escapeHtml(typeof item==='string'?item:item.address||'');return '<div class="bg-white border border-[#dcefe7] rounded-2xl p-4 flex items-center justify-between gap-3"><div class="text-xs">📍 '+label+'</div><div class="flex gap-3 text-xs font-bold"><button onclick="editAddress('+i+')" class="text-[#176b5b]">Edit</button><button onclick="removeAddress('+i+')" class="text-red-500">Delete</button></div></div>'}).join(''):'<div class="text-xs text-slate-500 p-4 bg-white border border-[#dcefe7] rounded-2xl">No saved addresses yet.</div>}
+function renderAddresses(){
+  const el=$('addressList');
+  if(!el)return;
+  if(!state.addresses.length){
+    el.innerHTML='<div class="text-xs text-slate-500 p-4 bg-white border border-[#dcefe7] rounded-2xl">No saved addresses yet.</div>';
+    return;
+  }
+  el.innerHTML=state.addresses.map((item,i)=>{
+    const label=escapeHtml(typeof item==='string'?item:(item?.address||''));
+    return '<div class="bg-white border border-[#dcefe7] rounded-2xl p-4 flex items-center justify-between gap-3">'+
+      '<div class="text-xs">📍 '+label+'</div>'+
+      '<div class="flex gap-3 text-xs font-bold">'+
+      '<button onclick="editAddress('+i+')" class="text-[#176b5b]">Edit</button>'+
+      '<button onclick="removeAddress('+i+')" class="text-red-500">Delete</button>'+
+      '</div></div>';
+  }).join('');
+}
