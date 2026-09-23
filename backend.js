@@ -142,6 +142,11 @@
       const fn=this.firebase.functions().httpsCallable("requestBookingCancellation");
       return (await fn({bookingId})).data;
     },
+    async resolveBookingCancellation(bookingId,decision){
+      const u=await this.signIn();if(!u||!this.firebase.functions)return null;
+      const fn=this.firebase.functions().httpsCallable("resolveBookingCancellation");
+      return (await fn({bookingId,decision})).data;
+    },
     async createSupportTicket(subject,message){
       const u=await this.signIn();if(!u||!this.firebase.functions)return null;
       const fn=this.firebase.functions().httpsCallable("createSupportTicket");
