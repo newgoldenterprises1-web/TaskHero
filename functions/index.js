@@ -1033,6 +1033,11 @@ exports.updatePartnerAvailability=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(p.approved!==true) throw new Error("Partner is not approved yet");
     if(next && !p.partnerLocation) throw new Error("Current location is required before going online");
     if(field==="available" && next && p.online!==true) throw new Error("Partner must be online before becoming available");
+
+    if(field==="online" && !next && p.currentBookingId){
+      throw new Error("Partner cannot go offline while a job is assigned. Complete, reject, or resolve the active job first.");
+    }
+
     if(field==="online" && !next && p.available===true){
       tx.update(ref,{online:false,available:false,updatedAt:FieldValue.serverTimestamp()});
       result={online:false,available:false};
