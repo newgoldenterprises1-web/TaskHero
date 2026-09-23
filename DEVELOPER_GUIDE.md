@@ -6,7 +6,8 @@ Customer application logic is intentionally split into focused files:
 - `customer/js/catalog.js` = customer service catalogue
 - `customer/js/auth.js` = customer authentication/session flow
 - `customer/js/navigation.js` = navigation, categories and service browsing
-- `customer/js/booking.js` = booking form, tracking, cancellation and rebooking
+- `customer/js/booking-form.js`
+- `customer/js/booking-tracking.js` = booking form, tracking, cancellation and rebooking
 - `customer/js/family.js` = Help for My Family
 - `customer/js/profile.js` = saved addresses and support
 - `customer/js/location.js` = device/manual location
@@ -37,7 +38,13 @@ The root `index.html` is only the customer entry shell/loader. It is not the pla
 - `family.html`
 - `profile.html`
 - `navigation.html`
-- `modals.html`
+- `auth/login.html` = login screen
+- `auth/signup.html` = signup screen
+- `modals/family.html`
+- `modals/service.html`
+- `modals/booking.html`
+- `modals/success.html`
+- `modals/toast.html`
 
 Add a new customer screen as a new HTML file instead of expanding root `index.html`.
 
@@ -171,3 +178,8 @@ node customer/test/smoke.js
 ```
 
 This checks Customer JS syntax and verifies that inline HTML handlers map to defined Customer functions.
+
+
+## Screen-level modularity
+
+Each independently meaningful Customer screen or UI component gets its own file. Authentication, booking, modal, and navigation UI must be split rather than bundled into one large fragment. Wrapper files are only allowed for layout slots or composition.

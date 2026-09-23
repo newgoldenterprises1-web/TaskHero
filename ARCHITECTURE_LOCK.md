@@ -19,7 +19,13 @@ Customer screens, sections, modals, styles, and application logic must remain in
 - `customer/pages/family.html`
 - `customer/pages/profile.html`
 - `customer/pages/navigation.html`
-- `customer/pages/modals.html`
+- `customer/pages/auth/login.html`
+- `customer/pages/auth/signup.html`
+- `customer/pages/modals/family.html`
+- `customer/pages/modals/service.html`
+- `customer/pages/modals/booking.html`
+- `customer/pages/modals/success.html`
+- `customer/pages/modals/toast.html`
 - `customer/css/app.css`
 - `customer/js/app.js`
 - `customer/js/shell-loader.js`
@@ -105,3 +111,12 @@ Both applications must remain modular. Do not put complete screens, all applicat
 Keep files reasonably small and responsibility-focused. New features should be split into the appropriate page/module/style file rather than making an existing entry file excessively long.
 
 Customer and Partner may share backend services/API contracts, but their frontend codebases, screens, navigation, and state logic remain separate.
+
+
+## Screen-level file rule
+
+Every customer UI screen or independently meaningful UI component must have its own focused file. Splash, login, signup, home, bookings, family, profile, booking form, service detail, success/tracking, navigation, and modal components are not to be bundled into one large HTML file.
+
+Wrapper files may only contain layout slots or composition markup. They must not contain the complete child screens.
+
+The same principle applies to Partner and Admin: keep entry files lightweight and place feature UI and logic in focused files.
