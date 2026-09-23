@@ -1,0 +1,210 @@
+const CATS=[['Family Assistance','♥'],['Home Services','⌂'],['Health & Hospital','✚'],['Pickups & Errands','▣'],['Repairs & Maintenance','⚒'],['Events & Special Help','★']];
+const SERVICES=[
+{id:1,n:'Parent Daily Assistance',c:'Family Assistance',p:299,d:'Trusted on-ground help for parents and family members.',i:'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800&auto=format&fit=crop'},
+{id:2,n:'Hospital Companion',c:'Health & Hospital',p:499,d:'Assistance with hospital visits, appointments and coordination.',i:'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=800&auto=format&fit=crop'},
+{id:3,n:'Medicine Pickup & Delivery',c:'Pickups & Errands',p:149,d:'Pickup medicines and deliver them to your family member.',i:'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=800&auto=format&fit=crop'},
+{id:4,n:'Grocery & Essentials Pickup',c:'Pickups & Errands',p:149,d:'Everyday grocery, household essentials and small shopping errands.',i:'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=800&auto=format&fit=crop'},
+{id:5,n:'Electrician Visit',c:'Home Services',p:199,d:'Switches, sockets, lights, fans and minor electrical work.',i:'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=800&auto=format&fit=crop'},
+{id:6,n:'Plumbing Assistance',c:'Home Services',p:199,d:'Leaks, taps, pipes, drainage and minor plumbing repairs.',i:'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=800&auto=format&fit=crop'},
+{id:7,n:'Laptop & Mobile Repair',c:'Repairs & Maintenance',p:249,d:'Pickup or on-site assistance for common device problems.',i:'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=800&auto=format&fit=crop'},
+{id:8,n:'Appliance Repair',c:'Repairs & Maintenance',p:299,d:'AC, refrigerator, washing machine and other appliance assistance.',i:'https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=800&auto=format&fit=crop'},
+{id:9,n:'Document Pickup & Submission',c:'Pickups & Errands',p:199,d:'Pickup, submission and delivery of documents and parcels.',i:'https://images.unsplash.com/photo-1554224155-6726b3ff858f?q=80&w=800&auto=format&fit=crop'},
+{id:10,n:'Family Function Assistance',c:'Events & Special Help',p:499,d:'Last-mile help for family functions, materials and coordination.',i:'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=800&auto=format&fit=crop'},
+{id:11,n:'Doctor Appointment Assistance',c:'Health & Hospital',p:299,d:'Appointment coordination and on-ground assistance.',i:'https://images.unsplash.com/photo-1638202993928-7d1138aeefba?q=80&w=800&auto=format&fit=crop'},
+{id:12,n:'Home Check & Small Tasks',c:'Family Assistance',p:249,d:'Routine home checks and small help when you cannot be there.',i:'https://images.unsplash.com/photo-1560185008-b033106af5c3?q=80&w=800&auto=format&fit=crop'}];
+let state={user:JSON.parse(localStorage.getItem('nf_user')||'null'),families:JSON.parse(localStorage.getItem('nf_families')||'[]'),addresses:JSON.parse(localStorage.getItem('nf_addresses')||'[]'),bookings:JSON.parse(localStorage.getItem('nf_bookings')||'[]'),cat:'all',selected:null,familyBookingTarget:null,location:{label:'',lat:null,lng:null},unsubscribeBookings:null};
+function save(){localStorage.setItem('nf_user',JSON.stringify(state.user));localStorage.setItem('nf_families',JSON.stringify(state.families));localStorage.setItem('nf_addresses',JSON.stringify(state.addresses));localStorage.setItem('nf_bookings',JSON.stringify(state.bookings))}
+function $(id){return document.getElementById(id)}
+function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2200)}
+function toggleAuth(sign){$('loginBox').classList.toggle('hide',sign);$('signupBox').classList.toggle('hide',!sign)}
+async function login(){
+  let phone=$('loginPhone').value.trim();
+  if(phone.length<10)return toast('Please enter a valid mobile number.');
+  if(NearFamilyBackend.ready){
+    try{
+      if(!$('loginOtp').classList.contains('hidden')){
+        let code=$('loginOtp').value.trim();
+        if(code.length!==6)return toast('Please enter the 6-digit OTP.');
+        const u=await NearFamilyBackend.confirmPhoneCode(code);
+        if(!u)return toast('OTP verification failed.');
+        let cloudUser=null;
+        try{const snap=await NearFamilyBackend.db.collection('users').doc(u.uid).get();if(snap.exists)cloudUser=snap.data()||null}catch(e){console.warn('Unable to load customer profile',e)}
+        state.user={name:cloudUser?.name||'Near Family Customer',phone:cloudUser?.phone||phone,uid:u.uid};
+      }else{
+        await NearFamilyBackend.startPhoneVerification(phone,'loginRecaptcha');
+        $('loginOtp').classList.remove('hidden');$('loginBtn').textContent='Verify OTP';$('loginPhone').disabled=true;
+        return toast('OTP sent to your mobile.');
+      }
+    }catch(e){console.warn(e);return toast('OTP could not be sent. Check Firebase Phone Auth setup.')}
+  }
+  if(!state.user?.uid)state.user={name:'Near Family Customer',phone};
+  save();
+  if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name:state.user.name,phone});
+  startApp();
+}
+async function signup(){
+  let name=$('signupName').value.trim(),phone=$('signupPhone').value.trim();
+  if(!name||phone.length<10)return toast('Please enter your name and mobile number.');
+  if(NearFamilyBackend.ready){
+    try{
+      if(!$('signupOtp').classList.contains('hidden')){
+        let code=$('signupOtp').value.trim();
+        if(code.length!==6)return toast('Please enter the 6-digit OTP.');
+        const u=await NearFamilyBackend.confirmPhoneCode(code);
+        if(!u)return toast('OTP verification failed.');
+        state.user={name,phone,uid:u.uid};
+      }else{
+        await NearFamilyBackend.startPhoneVerification(phone,'signupRecaptcha');
+        $('signupOtp').classList.remove('hidden');$('signupBtn').textContent='Verify OTP';$('signupPhone').disabled=true;
+        return toast('OTP sent to your mobile.');
+      }
+    }catch(e){console.warn(e);return toast('OTP could not be sent. Check Firebase Phone Auth setup.')}
+  }
+  if(!state.user?.uid)state.user={name,phone};
+  save();
+  if(NearFamilyBackend.ready)await NearFamilyBackend.saveUser({name:state.user.name,phone});
+  startApp();
+}
+async function hydrateCustomerCloudData(){
+  if(!window.NearFamilyBackend?.ready)return;
+  try{
+    const [families,addresses,bookings]=await Promise.all([
+      NearFamilyBackend.listFamilyMembers(),
+      NearFamilyBackend.listAddresses(),
+      NearFamilyBackend.listBookings()
+    ]);
+    if(Array.isArray(families))state.families=families.map(f=>({
+      id:f.id,name:f.name||'',relationship:f.relationship||'Family',phone:f.phone||'',address:f.address||''
+    }));
+    if(Array.isArray(addresses))state.addresses=addresses.map(a=>typeof a==='string'?a:{id:a.id,address:a.address||''}).filter(a=>typeof a==='string'?a.trim():a.address.trim());
+    if(Array.isArray(bookings))state.bookings=bookings.map(b=>({
+      ...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():(b.createdAt||new Date().toISOString()),
+      updatedAt:b.updatedAt?.toDate?b.updatedAt.toDate().toISOString():b.updatedAt
+    }));
+    save();renderAll();
+  }catch(e){console.warn('Customer cloud hydration unavailable; local data retained',e)}
+}
+async function startApp(){
+  $('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');
+  $('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';
+  $('profileName').textContent=state.user?.name||'Customer';$('profilePhone').textContent=state.user?.phone||'';
+  renderAll();requestLocation();
+  if(window.NearFamilyBackend?.ready&&state.user){
+    try{await NearFamilyBackend.saveUser({name:state.user.name,phone:state.user.phone});}catch(e){console.warn('User cloud sync unavailable',e)}
+    await hydrateCustomerCloudData();subscribeToBookingUpdates();await setupCustomerPushNotifications();
+  }
+}
+async function logout(){
+  if(state.unsubscribeBookings){state.unsubscribeBookings();state.unsubscribeBookings=null}
+  if(window.NearFamilyBackend?.ready){
+    try{await NearFamilyBackend.signOut()}catch(e){console.warn('Firebase sign-out failed',e)}
+  }
+  state.user=null;save();
+  $('app').classList.remove('active');$('auth').classList.add('active');toggleAuth(false);
+  toast('Logged out');
+}
+function go(page){['home','bookings','family','profile'].forEach(x=>{let p=$(x+'Page');if(p)p.classList.toggle('hide',x!==page)});$('homePage').classList.toggle('hide',page!=='home');document.querySelectorAll('.nav').forEach((n,i)=>n.classList.remove('text-[#176b5b]','font-bold'));renderAll();window.scrollTo(0,0)}
+function focusSearch(){go('home');setTimeout(()=>$('search').focus(),100)}
+function renderCategories(){ $('categories').innerHTML=CATS.map(x=>`<button onclick="setCategory('${x[0]}')" class="bg-white border border-[#dcefe7] rounded-2xl p-4 text-left soft hover:-translate-y-0.5 transition"><div class="w-9 h-9 rounded-xl bg-[#dcefe7] flex items-center justify-center text-[#176b5b]">${x[1]}</div><b class="block text-xs mt-3">${x[0]}</b></button>`).join('') }
+function setCategory(c){state.cat=c;go('home');renderServices()}
+function renderServices(){let q=($('search')?.value||'').toLowerCase();let arr=SERVICES.filter(s=>(state.cat==='all'||s.c===state.cat)&&(!q||s.n.toLowerCase().includes(q)||s.c.toLowerCase().includes(q)||s.d.toLowerCase().includes(q)));$('services').innerHTML=arr.length?arr.map(s=>`<article class="bg-white border border-[#dcefe7] rounded-3xl overflow-hidden soft hover:-translate-y-0.5 transition"><img src="${s.i}" class="w-full h-40 object-cover" alt="${s.n}"><div class="p-4"><div class="text-[10px] font-bold text-[#176b5b]">${s.c}</div><h3 class="font-black mt-1">${s.n}</h3><p class="text-xs text-slate-500 mt-1 line-clamp-2">${s.d}</p><div class="flex justify-between items-center mt-4"><div><span class="font-black text-lg">₹${s.p}</span><span class="text-[10px] text-slate-400"> starting</span></div><button onclick="openService(${s.id})" class="bg-[#176b5b] text-white px-4 py-2 rounded-xl text-xs font-bold">View</button></div></div></article>`).join(''):`<div class="col-span-full text-center bg-white rounded-3xl p-10 text-slate-500">No matching services found.</div>`}
+function openService(id){let s=SERVICES.find(x=>x.id===id);if(!s)return;state.selected=s;$('serviceDetail').innerHTML=`<img src="${s.i}" class="w-full h-48 object-cover rounded-2xl"><div class="text-xs text-[#176b5b] font-bold mt-4">${s.c}</div><h2 class="text-2xl font-black mt-1">${s.n}</h2><p class="text-sm text-slate-500 mt-2">${s.d}</p><div class="mt-5 bg-[#f7fcfa] rounded-2xl p-4"><b>What's included</b><ul class="text-xs text-slate-600 mt-2 space-y-2"><li>✓ Verified partner assignment</li><li>✓ Service coordination</li><li>✓ Status updates</li><li>✓ Support if something changes</li></ul></div><div class="flex justify-between items-center mt-5"><b class="text-2xl">₹${s.p}</b><button onclick="openBooking()" class="bg-[#176b5b] text-white font-black px-6 py-3 rounded-xl">Book Now</button></div>`;$('serviceModal').classList.add('show')}
+function closeService(){$('serviceModal').classList.remove('show')}
+function openBooking(){closeService();let s=state.selected;if(!s)return;$('photos').value='';if(state.familyBookingTarget){$('forWho').value='Family';updateFamilyOptions();const idx=Number(state.familyBookingTarget.index);if(Number.isInteger(idx)&&state.families[idx])$('familySelect').value=String(idx)}else{$('forWho').value='Me';updateFamilyOptions()}$('bookingSummary').innerHTML=`<div class="bg-[#dcefe7] rounded-2xl p-4"><b>${s.n}</b><p class="text-xs text-[#638079]">${s.c}</p></div>`;$('sumService').textContent=s.n;$('sumPrice').textContent='₹'+s.p;$('sumTotal').textContent='₹'+s.p;$('bookingName').value=state.user?.name||'';$('bookingPhone').value=state.user?.phone||'';let today=new Date().toISOString().slice(0,10);$('bookingDate').min=today;$('bookingDate').value=today;populateAddresses();updateFamilyOptions();$('bookingModal').classList.add('show')}
+function closeBooking(){$('bookingModal').classList.remove('show')}
+function resetBookingForm(){
+  state.familyBookingTarget=null;
+  $('forWho').value='Me';
+  $('familySelect').value='';
+  $('familySelect').classList.add('hide');
+  $('bookingName').value=state.user?.name||'';
+  $('bookingPhone').value=state.user?.phone||'';
+  $('addressSelect').value='';
+  $('newAddress').value='';
+  $('bookingTime').value='10:00 AM - 12:00 PM';
+  $('instructions').value='';
+  $('photos').value='';
+  state.familyBookingTarget=null;
+}
+function populateAddresses(){let a=[...new Set(state.addresses.filter(x=>String(x||'').trim()))];$('addressSelect').innerHTML='<option value="">Select saved address</option>'+a.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('')}
+function updateFamilyOptions(){let fam=$('forWho').value==='Family';$('familySelect').classList.toggle('hide',!fam);const select=$('familySelect');select.innerHTML='';if(fam){state.families.forEach((f,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=String(f.name||'Family')+' — '+String(f.relationship||'Family');select.appendChild(option)})}if(fam&&!state.families.length){toast('Add a family member first.');closeBooking();openFamily();}}
+async function confirmBooking(){
+  const s=state.selected,name=$('bookingName').value.trim(),phone=$('bookingPhone').value.trim(),addr=$('newAddress').value.trim()||$('addressSelect').value,date=$('bookingDate').value,time=$('bookingTime').value;
+  if(!s)return toast('Please select a service first.');if(!name)return toast('Please enter your full name.');if(phone.replace(/\D/g,'').length<10)return toast('Please enter a valid mobile number.');if(!addr)return toast('Please select or enter a service address.');if(!date)return toast('Please select a service date.');if(date<new Date().toISOString().slice(0,10))return toast('Please select today or a future date.');if(state.bookingSubmitting)return toast('Your request is already being submitted. Please wait.');
+  let target='Me',familyMemberId=null;
+  if($('forWho').value==='Family'){const idx=Number($('familySelect').value);const f=state.families[idx];if(!f)return toast('Please select a family member.');target=f.name+' ('+f.relationship+')';familyMemberId=f.id||null}
+  const selectedFiles=Array.from($('photos').files||[]).slice(0,5);if(selectedFiles.some(f=>!f.type.startsWith('image/')))return toast('Only image files can be uploaded.');if(selectedFiles.some(f=>f.size>8*1024*1024))return toast('Each photo must be 8 MB or smaller.');
+  state.bookingSubmitting=true;const submitButton=[...document.querySelectorAll('#bookingModal button')].find(b=>b.textContent.trim()==='Confirm Request');if(submitButton){submitButton.disabled=true;submitButton.textContent='Submitting...';submitButton.classList.add('opacity-60','cursor-not-allowed')}
+  try{
+    const savedAddress=state.addresses.find(x=>(typeof x==='string'?x:x.address)===addr);
+    const addressId=(savedAddress&&typeof savedAddress==='object'&&savedAddress.id)?String(savedAddress.id):null;
+    const clientRequestId=(window.crypto&&typeof window.crypto.randomUUID==='function')?window.crypto.randomUUID():('nf_'+Date.now()+'_'+Math.random().toString(36).slice(2,14));
+    const payload={service:s.n,category:s.c,price:s.p,name,phone,for:target,forWho:$('forWho').value,familyMemberId,address:addr,addressId,clientRequestId,date,time,instructions:$('instructions').value.trim(),photos:[],location:(state.location.lat!=null&&state.location.lng!=null)?{lat:Number(state.location.lat),lng:Number(state.location.lng),label:state.location.label||'Current location'}:null};
+    let b;
+    if(NearFamilyBackend.ready){
+      const id=await NearFamilyBackend.createBooking(payload);b={...payload,id,status:'requested',createdAt:new Date().toISOString()};
+      if(id)b.id=id;
+      if(selectedFiles.length){toast('Uploading photos...');b.photos=await NearFamilyBackend.uploadBookingPhotos(b.id,selectedFiles);await NearFamilyBackend.attachBookingPhotos(b.id,b.photos)}
+    }else{
+      b={...payload,id:'NF-'+Date.now().toString().slice(-8),status:'requested',createdAt:new Date().toISOString()};
+    }
+    state.bookings.unshift(b);
+    const newAddress=$('newAddress').value.trim();
+    if(newAddress&&!state.addresses.some(x=>(typeof x==='string'?x:x.address)===addr)){
+      if(NearFamilyBackend.ready){const addressId=await NearFamilyBackend.saveAddress(addr);state.addresses.unshift({id:addressId,address:addr})}else state.addresses.unshift(addr);
+    }
+    save();closeBooking();resetBookingForm();$('successText').textContent=s.n+' for '+target+' has been requested for '+date+' • '+time+'. Booking ID: '+b.id;$('successModal').classList.add('show');renderAll();
+  }catch(e){console.error('Booking submission failed',e);toast(e?.message||'We could not submit the request. Please try again.')}
+  finally{state.bookingSubmitting=false;if(submitButton){submitButton.disabled=false;submitButton.textContent='Confirm Request';submitButton.classList.remove('opacity-60','cursor-not-allowed')}}
+}
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function renderBookings(){let el=$('bookingsList');if(!state.bookings.length){el.innerHTML='<div class="bg-white border border-[#dcefe7] rounded-3xl p-8 text-center"><div class="text-3xl">📅</div><h3 class="font-black mt-3">No bookings yet</h3><p class="text-xs text-slate-500 mt-1">Choose a service and request help when you need it.</p><button onclick="go(\'home\')" class="mt-4 bg-[#176b5b] text-white px-5 py-3 rounded-xl font-bold text-sm">Explore Services</button></div>';return}el.innerHTML=state.bookings.map(b=>`<article class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><div class="flex justify-between gap-3"><div><span class="text-[10px] font-bold text-[#176b5b]">${escapeHtml(b.category)}</span><h3 class="font-black mt-1">${escapeHtml(b.service)}</h3><p class="text-xs text-slate-500 mt-1">For: ${escapeHtml(b.for)}</p></div><span class="h-fit text-[10px] font-bold bg-[#dcefe7] text-[#176b5b] px-3 py-1 rounded-full">${bookingStatusLabel(b.status)}</span></div><div class="mt-4 h-1.5 rounded-full bg-[#dcefe7] overflow-hidden"><div class="h-full bg-[#176b5b]" style="width:${bookingStep(b.status)===-1?0:((bookingStep(b.status)+1)/5*100)+'%'}"></div></div><div class="grid grid-cols-2 gap-3 mt-4 text-xs"><div>📍 ${escapeHtml(b.address)}</div><div>🗓 ${escapeHtml(b.date)}<br>⏰ ${escapeHtml(b.time)}</div></div><div class="mt-4 pt-3 border-t border-[#dcefe7] flex justify-between items-center"><span class="font-black">₹${escapeHtml(b.price)}</span><button onclick="viewBooking('${b.id}')" class="text-[#176b5b] font-bold text-xs">Track request →</button></div></article>`).join('')}
+function bookingStep(status){const map={requested:0,'Request Confirmed':0,searching_partner:1,partner_assigned:1,partner_on_the_way:2,service_started:3,completed:4,Completed:4,cancelled:-1,cancellation_requested:-1};return map[status]??0}
+function bookingStatusLabel(status){const map={requested:'Request Confirmed',searching_partner:'Finding a partner',partner_assigned:'Partner Assigned',partner_on_the_way:'Partner On The Way',service_started:'Service Started',completed:'Completed',Completed:'Completed',cancelled:'Cancelled',cancellation_requested:'Cancellation Requested'};return map[status]||status||'Request Confirmed'}
+function viewBooking(id){let b=state.bookings.find(x=>x.id===id);if(!b)return;const current=bookingStep(b.status),steps=['Request Confirmed','Partner Assigned','Partner On The Way','Service Started','Completed'],canCancel=!['completed','Completed','cancelled','cancellation_requested'].includes(String(b.status));$('serviceDetail').innerHTML=`<div class="text-center"><div class="w-14 h-14 bg-[#dcefe7] rounded-full text-[#176b5b] flex items-center justify-center mx-auto text-xl">${current===-1?'!':'✓'}</div><h2 class="text-2xl font-black mt-3">${bookingStatusLabel(b.status)}</h2><p class="text-xs text-slate-500">${escapeHtml(b.id)}</p></div><div class="mt-5 space-y-3 text-sm"><div><b>Service</b><p>${escapeHtml(b.service)}</p></div><div><b>For</b><p>${escapeHtml(b.for)}</p></div><div><b>When</b><p>${escapeHtml(b.date)} • ${escapeHtml(b.time)}</p></div><div><b>Where</b><p>${escapeHtml(b.address)}</p></div><div><b>Instructions</b><p>${escapeHtml(b.instructions||'—')}</p></div></div><div class="mt-6 bg-[#f7fcfa] rounded-2xl p-4"><b>Booking progress</b><div class="mt-4 space-y-3 text-xs">${steps.map((label,i)=>`<div class="flex items-center gap-3"><span class="w-7 h-7 rounded-full flex items-center justify-center ${current>=i?'bg-[#176b5b] text-white':'bg-[#dcefe7] text-[#638079]'}">${current>=i?'✓':i+1}</span><span class="${current>=i?'font-bold text-[#176b5b]':'text-slate-400'}">${label}</span></div>`).join('')}${current===-1?'<p class="mt-3 text-red-600 font-bold">This request has been cancelled.</p>':b.status==='cancellation_requested'?'<p class="mt-3 text-amber-700 font-bold">Cancellation request submitted. We will update you when it is resolved.</p>':''}</div><div class="mt-4 flex gap-2 flex-wrap justify-center">${canCancel?'<button class="px-4 py-2 rounded-xl border font-bold text-sm" onclick="requestBookingCancellation(\''+b.id+'\')">Request cancellation</button>':''}<button class="px-4 py-2 rounded-xl border font-bold text-sm" onclick="rebookBooking(\''+b.id+'\')">Rebook</button></div></div>${b.partnerId?'<div class="mt-4 bg-white border border-[#dcefe7] rounded-2xl p-4 text-xs"><b>Partner assigned</b><p class="text-slate-500 mt-1">Your service partner has been assigned. Live partner details will appear here when enabled.</p></div>':''}`;$('serviceModal').classList.add('show')}
+function openFamily(){renderFamilyModal();$('familyModal').classList.add('show')}
+function closeFamily(){$('familyModal').classList.remove('show')}
+function renderFamilyModal(){$('familyModalList').innerHTML=state.families.length?state.families.map((f,i)=>`<button onclick="selectFamily(${i})" class="bg-[#f7fcfa] border border-[#dcefe7] rounded-2xl p-4 text-left"><div class="w-10 h-10 rounded-xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center">${f.relationship==='Dad'?'👨':f.relationship==='Mom'?'👩':'❤️'}</div><b class="block mt-2">${escapeHtml(f.name)}</b><span class="text-xs text-slate-500">${escapeHtml(f.relationship)}</span></button>`).join(''):'<p class="col-span-2 text-center text-sm text-slate-500 py-6">No family members saved yet.</p>'}
+async function addFamily(){let name=(prompt('Family member name:')||'').trim();if(!name)return;if(name.length>80)return toast('Family member name is too long.');let rel=(prompt('Relationship (Mom, Dad, Grandma, etc.):','Dad')||'').trim()||'Family';if(rel.length>40)return toast('Relationship is too long.');let phone=(prompt('Phone number:','')||'').trim();if(phone&&phone.replace(/\\D/g,'').length<10)return toast('Please enter a valid phone number or leave it blank.');let address=(prompt('Address/locality:','')||'').trim();if(address.length>300)return toast('Address is too long.');let family={name,relationship:rel,phone,address};state.families.push(family);if(address&&!state.addresses.includes(address))state.addresses.push(address);save();if(NearFamilyBackend.ready){try{const familyId=await NearFamilyBackend.saveFamilyMember(family);if(familyId)family.id=familyId;if(address)await NearFamilyBackend.saveAddress(address);save()}catch(e){console.warn('Cloud family save failed; keeping local copy',e)}}renderAll();renderFamilyModal();toast(name+' added to your family')}function selectFamily(i){let f=state.families[i];if(!f)return;closeFamily();state.selected=null;state.familyBookingTarget={id:f.id||null,index:i,name:f.name};go('home');toast('Choose a service for '+f.name);setTimeout(()=>{const first=$('services')?.querySelector('button');if(first)first.scrollIntoView({behavior:'smooth',block:'center'})},120)}
+function renderFamilyPage(){$('familyCards').innerHTML=state.families.length?state.families.map((f,i)=>{const name=escapeHtml(f.name||'Family Member'),relationship=escapeHtml(f.relationship||'Family'),phone=escapeHtml(f.phone||'Not added'),address=escapeHtml(f.address||'Address not added');return `<div class="bg-white border border-[#dcefe7] rounded-3xl p-5 soft"><div class="flex justify-between"><div><div class="w-11 h-11 rounded-xl bg-[#dcefe7] text-[#176b5b] flex items-center justify-center">♥</div><h3 class="font-black mt-3">${name}</h3><p class="text-xs text-slate-500">${relationship}</p></div><button onclick="removeFamily(${i})" class="text-red-400" aria-label="Remove family member">×</button></div><p class="text-xs mt-4">📞 ${phone}</p><p class="text-xs mt-1">📍 ${address}</p><button onclick="selectFamily(${i})" class="w-full mt-4 bg-[#176b5b] text-white py-2.5 rounded-xl text-xs font-bold">Request Help</button></div>`}).join(''):'<div class="sm:col-span-2 bg-white rounded-3xl border border-[#dcefe7] p-8 text-center text-sm text-slate-500">Add Mom, Dad or another family member to request help quickly.</div>'}
+async function editFamily(i){const f=state.families[i];if(!f)return;const name=(prompt('Family member name:',f.name||'')||'').trim();if(!name)return;const rel=(prompt('Relationship:',f.relationship||'Family')||'').trim()||'Family';const phone=(prompt('Phone number:',f.phone||'')||'').trim();const address=(prompt('Address/locality:',f.address||'')||'').trim();const updated={...f,name,relationship:rel,phone,address};state.families[i]=updated;save();if(NearFamilyBackend.ready&&f.id){try{await NearFamilyBackend.saveFamilyMember(updated,f.id);toast('Family member updated')}catch(e){state.families[i]=f;save();toast('Could not update family member')}}else toast('Family member updated');renderAll()}
+async function removeFamily(i){const f=state.families[i];if(!f)return;if(!confirm('Remove '+f.name+' from your family list?'))return;if(NearFamilyBackend.ready&&f.id){try{await NearFamilyBackend.deleteFamilyMember(f.id)}catch(e){toast('Could not remove family member');return}}state.families.splice(i,1);save();renderAll();toast(f.name+' removed')}
+async function manageAddresses(){const value=(prompt('Enter a new saved address/locality:','')||'').trim();if(!value)return;if(state.addresses.some(x=>(typeof x==='string'?x:x.address)===value))return toast('This address is already saved');state.addresses.unshift(value);save();if(NearFamilyBackend.ready){try{const id=await NearFamilyBackend.saveAddress(value);state.addresses[0]={id,address:value};save()}catch(e){console.warn('Cloud address save failed; keeping local copy',e)}}toast('Address saved')}
+async function editAddress(i){const item=state.addresses[i];const current=typeof item==='string'?item:item?.address||'';if(!current)return;const value=(prompt('Edit saved address:',current)||'').trim();if(!value)return;const id=typeof item==='string'?null:item.id;state.addresses[i]=id?{id,address:value}:value;save();if(NearFamilyBackend.ready&&id){try{await NearFamilyBackend.saveAddress(value,id);toast('Address updated')}catch(e){state.addresses[i]=item;save();toast('Could not update address');return}}else toast('Address updated');renderAll()}
+async function removeAddress(i){const item=state.addresses[i];const label=typeof item==='string'?item:item?.address||'';if(!label)return;if(!confirm('Remove this saved address?'))return;const id=typeof item==='string'?null:item.id;if(NearFamilyBackend.ready&&id){try{await NearFamilyBackend.deleteAddress(id)}catch(e){toast('Could not remove address');return}}state.addresses.splice(i,1);save();renderAll();toast('Address removed')}
+async function openSupport(){
+  const message=(prompt('Describe your issue or booking problem:','')||'').trim();
+  if(!message)return;
+  if(message.length>4000)return toast('Message is too long.');
+  if(window.NearFamilyBackend?.ready){
+    try{
+      const result=await NearFamilyBackend.createSupportTicket('Near Family Support Request',message);
+      if(result?.id){toast('Support request submitted');return;}
+    }catch(e){console.warn('Cloud support ticket failed',e)}
+  }
+  const subject=encodeURIComponent('Near Family Support Request');
+  const body=encodeURIComponent('Hello Near Family Support,\\n\\n'+message+'\\n\\nCustomer: '+(state.user?.name||'')+'\\nPhone: '+(state.user?.phone||''));
+  window.location.href='mailto:support@nearfamily.in?subject='+subject+'&body='+body;
+}
+async function requestBookingCancellation(id){const b=state.bookings.find(x=>x.id===id);if(!b||['completed','cancelled','cancellation_requested'].includes(b.status))return;if(!confirm('Request cancellation for this booking?'))return;if(window.NearFamilyBackend?.ready){try{await NearFamilyBackend.requestBookingCancellation(id);b.status='cancellation_requested';b.cancellationRequestedAt=new Date().toISOString();b.updatedAt=new Date().toISOString();save();renderAll();if($('bookingModal')?.classList.contains('show'))viewBooking(id);toast('Cancellation request submitted')}catch(e){console.warn(e);toast('Cancellation request could not be submitted')}}else{b.status='cancellation_requested';b.cancellationRequestedAt=new Date().toISOString();b.updatedAt=new Date().toISOString();save();renderAll();if($('bookingModal')?.classList.contains('show'))viewBooking(id);toast('Cancellation request saved locally')}}\nfunction rebookBooking(id){const b=state.bookings.find(x=>x.id===id);if(!b)return;const s=SERVICES.find(x=>x.n===b.service)||{id:0,n:b.service,c:b.category,p:b.price,d:'',i:''};state.selected=s;let rebookFamilyIndex=-1;if(b.familyMemberId)rebookFamilyIndex=state.families.findIndex(f=>f.id===b.familyMemberId);if(rebookFamilyIndex<0&&b.forWho==='Family'&&b.for){let who=String(b.for).split(' (')[0].trim();rebookFamilyIndex=state.families.findIndex(f=>f.name===who)}state.familyBookingTarget=rebookFamilyIndex>=0?{id:state.families[rebookFamilyIndex].id||null,index:rebookFamilyIndex,name:state.families[rebookFamilyIndex].name}:null;closeService();$('bookingSummary').innerHTML='<div class="bg-[#dcefe7] rounded-2xl p-4"><b>'+s.n+'</b><p class="text-xs text-[#638079]">'+s.c+'</p></div>';$('sumService').textContent=s.n;$('sumPrice').textContent='₹'+s.p;$('sumTotal').textContent='₹'+s.p;$('bookingName').value=state.user?.name||b.name||'';$('bookingPhone').value=state.user?.phone||b.phone||'';let today=new Date().toISOString().slice(0,10);$('bookingDate').min=today;$('bookingDate').value=today;$('bookingTime').value=b.time||'10:00 AM - 12:00 PM';$('newAddress').value=b.address||'';$('instructions').value=b.instructions||'';$('forWho').value=b.forWho||'Me';updateFamilyOptions();let idx=-1;if(b.familyMemberId)idx=state.families.findIndex(f=>f.id===b.familyMemberId);if(idx<0&&b.forWho==='Family'&&b.for){let who=String(b.for).split(' (')[0].trim();idx=state.families.findIndex(f=>f.name===who)}if(idx>=0){$('forWho').value='Family';updateFamilyOptions();$('familySelect').value=String(idx)}$('bookingModal').classList.add('show')}\nfunction requestLocation(){if(!navigator.geolocation)return manualLocation();navigator.geolocation.getCurrentPosition(pos=>{state.location.lat=pos.coords.latitude;state.location.lng=pos.coords.longitude;state.location.label='Current location';$('locationText').textContent='Current location detected';save()},()=>manualLocation(),{enableHighAccuracy:true,timeout:9000,maximumAge:300000})}
+function manualLocation(){let value=prompt('Location permission is unavailable. Enter your city/locality or full address:','');if(value&&value.trim()){state.location.label=value.trim();state.location.lat=null;state.location.lng=null;$('locationText').textContent=value.trim();save();toast('Location saved')}}
+function renderAddresses(){const el=$('addressList');if(!el)return;el.innerHTML=state.addresses.length?state.addresses.map((item,i)=>{const label=escapeHtml(typeof item==='string'?item:item.address||'');return '<div class="bg-white border border-[#dcefe7] rounded-2xl p-4 flex items-center justify-between gap-3"><div class="text-xs">📍 '+label+'</div><div class="flex gap-3 text-xs font-bold"><button onclick="editAddress('+i+')" class="text-[#176b5b]">Edit</button><button onclick="removeAddress('+i+')" class="text-red-500">Delete</button></div></div>'}).join(''):'<div class="text-xs text-slate-500 p-4 bg-white border border-[#dcefe7] rounded-2xl">No saved addresses yet.</div>}
+function renderAll(){renderCategories();renderServices();renderBookings();renderFamilyPage();renderAddresses();let n=state.bookings.filter(b=>!['completed','Completed','cancelled'].includes(String(b.status))).length;$('bookingBadge').classList.toggle('hide',!n);if(n)$('bookingBadge').textContent=n}
+async function setupCustomerPushNotifications(){
+  if(!NearFamilyBackend.ready||!state.user)return;
+  const key=window.NEAR_FAMILY_FIREBASE_CONFIG?.messagingVapidKey;
+  if(!key||key.startsWith("REPLACE_")||!window.Notification)return;
+  try{
+    const token=await NearFamilyBackend.registerMessagingToken(key);
+    if(token)toast('Notifications enabled for booking updates');
+    NearFamilyBackend.onForegroundMessage(payload=>{
+      const title=payload?.notification?.title||'Near Family update';
+      const body=payload?.notification?.body||'Your booking has a new update.';
+      toast(title+' — '+body);
+    });
+  }catch(e){console.warn('Push notifications unavailable; app continues normally',e)}
+}
+async function syncCloudBookings(){if(!NearFamilyBackend.ready||!state.user)return;try{const cloud=await NearFamilyBackend.listBookings();if(cloud.length){state.bookings=cloud.map(b=>({...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():b.createdAt}));save();renderBookings();let n=state.bookings.filter(b=>b.status!=='completed'&&b.status!=='Completed').length;$('bookingBadge').classList.toggle('hide',!n);if(n)$('bookingBadge').textContent=n}}catch(e){console.warn('Cloud booking sync unavailable; local data retained',e)}}
+async function syncCustomerData(){if(!NearFamilyBackend.ready||!state.user)return;try{const [families,addresses]=await Promise.all([NearFamilyBackend.listFamilyMembers(),NearFamilyBackend.listAddresses()]);if(families.length)state.families=families.map(f=>({id:f.id,name:f.name,relationship:f.relationship,phone:f.phone||'',address:f.address||''}));if(addresses.length)state.addresses=[...new Set(addresses)];save();renderAll()}catch(e){console.warn('Customer data sync unavailable; local data retained',e)}}
+function subscribeToBookingUpdates(){if(!NearFamilyBackend.ready||!state.user)return;if(state.unsubscribeBookings)state.unsubscribeBookings();let initial=true;const previous={};state.unsubscribeBookings=NearFamilyBackend.subscribeBookings(items=>{const next=items.map(b=>({...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():b.createdAt,status:b.status||'requested'}));next.forEach(b=>{const before=previous[b.id];if(!initial&&before&&before!==b.status){const label=bookingStatusLabel(b.status);toast('Booking update: '+label);if(b.status==='completed')setTimeout(()=>toast('Your service is completed ❤️'),150)}});next.forEach(b=>previous[b.id]=b.status);state.bookings=next;save();renderBookings();let n=state.bookings.filter(b=>!['completed','Completed','cancelled'].includes(String(b.status))).length;$('bookingBadge').classList.toggle('hide',!n);if(n)$('bookingBadge').textContent=n;initial=false})}
+async function initNearFamily(){setTimeout(()=>{$('splash').style.display='none';if(state.user)startApp();else $('auth').classList.add('active')},1600);if(!state.user)$('auth').classList.remove('active');try{await NearFamilyBackend.init();if(NearFamilyBackend.ready&&state.user){await NearFamilyBackend.saveUser({name:state.user.name,phone:state.user.phone});await syncCustomerData();await syncCloudBookings();subscribeToBookingUpdates();await setupCustomerPushNotifications()}}catch(e){console.warn('Backend unavailable; local mode retained',e)}}
