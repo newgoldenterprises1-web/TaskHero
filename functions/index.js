@@ -229,14 +229,42 @@ const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_"
 
 exports.health=onCall(CALLABLE_OPTIONS,()=>({ok:true,service:"near-family-functions"}));
 
+const SERVICE_CATALOG={
+  "Parent Daily Assistance":{category:"Family Assistance",price:299},
+  "Hospital Companion":{category:"Health & Hospital",price:499},
+  "Medicine Pickup & Delivery":{category:"Pickups & Errands",price:149},
+  "Grocery & Essentials Pickup":{category:"Pickups & Errands",price:149},
+  "Electrician Visit":{category:"Home Services",price:199},
+  "Plumbing Assistance":{category:"Home Services",price:199},
+  "Laptop & Mobile Repair":{category:"Repairs & Maintenance",price:249},
+  "Appliance Repair":{category:"Repairs & Maintenance",price:299},
+  "Document Pickup & Submission":{category:"Pickups & Errands",price:199},
+  "Family Function Assistance":{category:"Events & Special Help",price:499},
+  "Doctor Appointment Assistance":{category:"Health & Hospital",price:299},
+  "Home Check & Small Tasks":{category:"Family Assistance",price:249}
+};
+
+function validClientRequestId(value){
+  const v=String(value||"").trim();
+  return v.length>=16 && v.length<=128 && /^[A-Za-z0-9._-]+$/.test(v);
+}
+function bookingDocId(uid,clientRequestId){
+  const crypto=require("crypto");
+  return crypto.createHash("sha256").update(uid+"|"+clientRequestId).digest("hex");
+}
+
 exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
   await rateLimit(request.auth.uid,"create");
   const data=request.data||{};
   if(data===null || typeof data!=="object" || Array.isArray(data)) throw new Error("Invalid booking payload");
-  const allowed=["service","category","price","name","phone","for","forWho","familyMemberId","address","date","time","instructions","photos","location"];
+  const allowed=["service","category","price","name","phone","for","forWho","familyMemberId","address","addressId","date","time","instructions","photos","location","clientRequestId"];
   const keys=Object.keys(data);
   if(keys.some(k=>!allowed.includes(k))) throw new Error("Invalid booking fields");
+
+  const clientRequestId=String(data.clientRequestId||"").trim();
+  if(!validClientRequestId(clientRequestId)) throw new Error("Invalid booking request id");
+
   const service=assertText(data.service,160,"Service");
   const category=assertText(data.category,120,"Category");
   const name=assertText(data.name,120,"Name");
@@ -246,32 +274,116 @@ exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   const time=String(data.time||"").trim();
   if(!service||!category||!name||phone.length<10||!address||!date||!time) throw new Error("Required booking details are missing");
   if(service.length>160||category.length>120||name.length>120||phone.length>30||address.length>1000||date.length>40||time.length>80) throw new Error("Booking field is too long");
+
+  const catalog=SERVICE_CATALOG[service];
+  if(!catalog || catalog.category!==category) throw new Error("Service is not available");
   const price=Number(data.price);
-  if(!Number.isFinite(price)||!Number.isInteger(Math.round(price*100))||price<0||price>1000000) throw new Error("Invalid booking price");
-  if(Math.round(price*100)!==price*100) throw new Error("Price must use at most 2 decimal places");
-  if(data.photos!==undefined && !Array.isArray(data.photos)) throw new Error("Invalid booking photos");
-  if(Array.isArray(data.photos) && data.photos.length>5) throw new Error("Too many booking photos");
+  if(price!==catalog.price) throw new Error("Invalid service price");
+
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) throw new Error("Invalid service date");
+  const requestedDate=new Date(date+"T00:00:00Z");
+  if(Number.isNaN(requestedDate.getTime())) throw new Error("Invalid service date");
+  const today=new Date();
+  const todayUtc=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate()));
+  if(requestedDate<todayUtc) throw new Error("Service date cannot be in the past");
+
+  if(data.photos!==undefined && (!Array.isArray(data.photos) || data.photos.length)) throw new Error("Booking photos must be uploaded after booking creation");
   if(data.location!==null && data.location!==undefined){
     const lat=Number(data.location.lat),lng=Number(data.location.lng);
     if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180) throw new Error("Invalid booking location");
   }
-  const payload={
-    service,category,price,name,phone,
-    for:String(data.for||"Me").slice(0,160),
-    forWho:String(data.forWho||"Me").slice(0,40),
-    familyMemberId:data.familyMemberId?String(data.familyMemberId).slice(0,128):null,
-    address,date,time,
-    instructions:String(data.instructions||"").slice(0,4000),
-    photos:Array.isArray(data.photos)?data.photos.slice(0,5):[],
-    location:data.location||null,
-    customerId:request.auth.uid,
-    status:"requested",
-    createdAt:FieldValue.serverTimestamp(),
-    updatedAt:FieldValue.serverTimestamp()
-  };
-  const ref=await db.collection("bookings").add(payload);
-  await auditSecurityEvent({type:"booking_created",uid:request.auth.uid,bookingId:ref.id});
-  return {id:ref.id,status:"requested"};
+
+  const forWho=String(data.forWho||"Me").trim();
+  if(!["Me","Family"].includes(forWho)) throw new Error("Invalid booking target");
+  const familyMemberId=data.familyMemberId?String(data.familyMemberId).trim():"";
+  if(forWho==="Family" && !familyMemberId) throw new Error("Family member is required");
+  if(forWho==="Me" && familyMemberId) throw new Error("Family member is not valid for this booking");
+
+  const addressId=data.addressId?String(data.addressId).trim():"";
+  if(addressId && !/^[A-Za-z0-9_-]{1,150}$/.test(addressId)) throw new Error("Invalid address id");
+
+  const bookingRef=db.collection("bookings").doc(bookingDocId(request.auth.uid,clientRequestId));
+  const familyRef=familyMemberId?db.collection("familyMembers").doc(familyMemberId):null;
+  const addressRef=addressId?db.collection("addresses").doc(addressId):null;
+  let result;
+
+  await db.runTransaction(async(tx)=>{
+    const existing=await tx.get(bookingRef);
+    if(existing.exists){
+      const old=existing.data()||{};
+      if(old.customerId!==request.auth.uid || old.clientRequestId!==clientRequestId) throw new Error("Booking request could not be verified");
+      result={id:existing.id,status:old.status||"requested",duplicate:true};
+      return;
+    }
+
+    let family=null;
+    if(familyRef){
+      const familySnap=await tx.get(familyRef);
+      if(!familySnap.exists) throw new Error("Family member not found");
+      family=familySnap.data()||{};
+      if(family.customerId!==request.auth.uid) throw new Error("Family member does not belong to this account");
+    }
+
+    let savedAddress=null;
+    if(addressRef){
+      const addressSnap=await tx.get(addressRef);
+      if(!addressSnap.exists) throw new Error("Saved address not found");
+      savedAddress=addressSnap.data()||{};
+      if(savedAddress.customerId!==request.auth.uid) throw new Error("Saved address does not belong to this account");
+      if(String(savedAddress.address||"").trim()!==address) throw new Error("Saved address does not match the booking address");
+    }
+
+    const target=forWho==="Family"
+      ? String(family.name||"Family")+" ("+String(family.relationship||"Family")+")"
+      : "Me";
+
+    const payload={
+      service,category,price,name,phone,
+      for:target,forWho,
+      familyMemberId:familyMemberId||null,
+      address,addressId:addressId||null,date,time,
+      instructions:String(data.instructions||"").slice(0,4000),
+      photos:[],
+      location:data.location||null,
+      customerId:request.auth.uid,
+      clientRequestId,
+      status:"requested",
+      createdAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp()
+    };
+    tx.create(bookingRef,payload);
+    result={id:bookingRef.id,status:"requested",duplicate:false};
+  });
+
+  if(!result.duplicate) await auditSecurityEvent({type:"booking_created",uid:request.auth.uid,bookingId:result.id,clientRequestId});
+  return result;
+});
+
+exports.attachBookingPhotos=onCall(CALLABLE_OPTIONS,async(request)=>{
+  if(!request.auth) throw new Error("Authentication required");
+  const bookingId=String(request.data?.bookingId||"").trim();
+  const photos=request.data?.photos;
+  if(!bookingId || bookingId.length>128 || !Array.isArray(photos) || photos.length>5) throw new Error("Invalid booking photos request");
+  const ref=db.collection("bookings").doc(bookingId);
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists) throw new Error("Booking not found");
+    const b=snap.data()||{};
+    if(b.customerId!==request.auth.uid) throw new Error("Not your booking");
+    if(["completed","cancelled"].includes(String(b.status||""))) throw new Error("Photos cannot be added to this booking");
+    const safe=photos.map(p=>{
+      if(!p || typeof p!=="object") throw new Error("Invalid booking photo");
+      const name=String(p.name||"photo").slice(0,160);
+      const url=String(p.url||"");
+      const prefix="https://firebasestorage.googleapis.com/";
+      const encoded="/o/users%2F"+encodeURIComponent(request.auth.uid)+"%2Fbookings%2F"+encodeURIComponent(bookingId)+"%2F";
+      const raw="/o/users/"+request.auth.uid+"/bookings/"+bookingId+"/";
+      if(!url.startsWith(prefix) || !(url.includes(encoded)||url.includes(raw))) throw new Error("Booking photo does not belong to this booking");
+      return {name,url};
+    });
+    tx.update(ref,{photos:safe,updatedAt:FieldValue.serverTimestamp()});
+  });
+  return {ok:true,bookingId,photos};
 });
 
 function assertText(value,max,name){
