@@ -22,7 +22,7 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeScreen(state: widget.state),
+      HomeScreen(state: widget.state, onOpenBulkOrders: () => setState(() => index = 2)),
       BookingsScreen(state: widget.state),
       BulkOrdersScreen(state: widget.state),
       FamilyScreen(state: widget.state),
