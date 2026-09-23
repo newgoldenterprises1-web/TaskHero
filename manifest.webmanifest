@@ -1,0 +1,10 @@
+{
+  "name":"Near Family",
+  "short_name":"Near Family",
+  "description":"When you can't be there, we're there.",
+  "start_url":"./index.html",
+  "display":"standalone",
+  "background_color":"#101923",
+  "theme_color":"#101923",
+  "icons":[{"src":"assets/near-family-app-icon.webp","sizes":"512x512","type":"image/webp","purpose":"any maskable"}]
+}
