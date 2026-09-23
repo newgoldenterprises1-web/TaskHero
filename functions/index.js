@@ -371,6 +371,80 @@ async function findPartner(booking){
   return candidates[0]||null;
 }
 
+async function dispatchPendingBookingForPartner(partnerId){
+  const partnerRef=db.collection("partners").doc(partnerId);
+  const partnerSnap=await partnerRef.get();
+  if(!partnerSnap.exists)return null;
+  const partner=partnerSnap.data()||{};
+  if(partner.approved!==true || partner.online!==true || partner.available===false || partner.currentBookingId)return null;
+  const categories=Array.isArray(partner.serviceCategories)?partner.serviceCategories.filter(Boolean).slice(0,30):[];
+  if(!categories.length)return null;
+
+  const pendingSnap=await db.collection("bookings")
+    .where("status","==","searching_partner")
+    .orderBy("createdAt","asc")
+    .limit(50).get();
+
+  for(const doc of pendingSnap.docs){
+    const booking=doc.data()||{};
+    if(booking.partnerId || !categories.includes(String(booking.category||"")) ||
+       (booking.rejectedPartnerIds||[]).includes(partnerId)) continue;
+
+    let assigned=false;
+    try{
+      await db.runTransaction(async(tx)=>{
+        const bookingSnap=await tx.get(doc.ref);
+        const livePartnerSnap=await tx.get(partnerRef);
+        if(!bookingSnap.exists || !livePartnerSnap.exists)return;
+        const b=bookingSnap.data()||{};
+        const p=livePartnerSnap.data()||{};
+        if(b.partnerId || b.status!== "searching_partner" ||
+           (b.rejectedPartnerIds||[]).includes(partnerId) ||
+           p.approved!==true || p.online!==true || p.available===false || p.currentBookingId)return;
+        tx.update(doc.ref,{
+          partnerId,
+          status:"partner_assigned",
+          dispatchedAt:FieldValue.serverTimestamp(),
+          updatedAt:FieldValue.serverTimestamp()
+        });
+        tx.update(partnerRef,{
+          currentBookingId:doc.id,
+          updatedAt:FieldValue.serverTimestamp()
+        });
+        assigned=true;
+      });
+    }catch(err){
+      console.warn("Pending booking dispatch failed",partnerId,doc.id,err);
+    }
+    if(assigned){
+      await notifyUser(booking.customerId,"Near Family — Partner assigned","A verified partner has been assigned to your request.",{
+        bookingId:doc.id,status:"partner_assigned"
+      });
+      await notifyUser(partnerId,"New Near Family job","You have a new service request.",{
+        bookingId:doc.id,status:"partner_assigned"
+      });
+      return doc.id;
+    }
+  }
+  return null;
+}
+
+exports.onPartnerAvailabilityUpdated=onDocumentUpdated("partners/{partnerId}",async(event)=>{
+  const before=event.data.before.data()||{};
+  const after=event.data.after.data()||{};
+  const becameEligible=after.approved===true && after.online===true && after.available!==false && !after.currentBookingId;
+  if(!becameEligible)return;
+  const relevantChange=
+    before.approved!==after.approved ||
+    before.online!==after.online ||
+    before.available!==after.available ||
+    before.currentBookingId!==after.currentBookingId ||
+    JSON.stringify(before.serviceCategories||[])!==JSON.stringify(after.serviceCategories||[]) ||
+    JSON.stringify(before.partnerLocation||null)!==JSON.stringify(after.partnerLocation||null);
+  if(!relevantChange)return;
+  await dispatchPendingBookingForPartner(event.params.partnerId);
+});
+
 exports.onBookingCreated=onDocumentCreated("bookings/{bookingId}",async(event)=>{
   const ref=event.data?.ref;
   const booking=event.data?.data();
