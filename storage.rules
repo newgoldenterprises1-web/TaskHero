@@ -26,10 +26,9 @@ service firebase.storage {
     }
 
     match /bookings/{bookingId}/{allPaths=**} {
+      // Only the explicit completion path below is writable by partners.
       allow read: if admin() || bookingCustomer(bookingId) || bookingPartner(bookingId);
-      allow write: if bookingPartner(bookingId)
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow write: if false;
     }
 
     match /partner-kyc/{uid}/{allPaths=**} {
