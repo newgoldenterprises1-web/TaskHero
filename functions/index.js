@@ -346,18 +346,42 @@ function partnerHasFreshLocation(p,maxAgeMs=30*60*1000){
   if(!updated?.toMillis) return false;
   return Date.now()-updated.toMillis() <= maxAgeMs;
 }
+function serviceAreaRadiusKm(p){
+  const value=Number(p.serviceRadiusKm ?? p.maxServiceRadiusKm);
+  return Number.isFinite(value)&&value>0&&value<=500 ? value : null;
+}
+function partnerMatchesServiceArea(p,booking,distance){
+  const configured=serviceAreaRadiusKm(p);
+  if(configured!==null){
+    // A configured service radius is enforced only when both sides have coordinates.
+    // If the booking has no coordinates, keep the partner eligible for manual/locality fallback.
+    return distance===null || distance<=configured;
+  }
+  // If a partner explicitly supplies service-area labels, use the booking label/address
+  // as an additional server-side locality check. Without either field, do not invent geography.
+  const areas=Array.isArray(p.serviceAreas)?p.serviceAreas.map(x=>String(x||"").trim().toLowerCase()).filter(Boolean):[];
+  if(!areas.length)return true;
+  const haystack=[booking.location?.label,booking.address].map(x=>String(x||"").toLowerCase()).join(" ");
+  return areas.some(area=>haystack.includes(area));
+}
 async function findPartners(booking){
   const snap=await db.collection("partners")
     .where("online","==",true)
     .where("approved","==",true)
+    .where("available","==",true)
     .where("serviceCategories","array-contains",booking.category||"")
     .limit(100).get();
   return snap.docs.map(d=>({id:d.id,...d.data()}))
-    .filter(p=>p.available!==false
-      && !p.currentBookingId
-      && !(booking.rejectedPartnerIds||[]).includes(p.id))
-    .map(p=>({...p,distanceKm:distanceKm(booking.location,partnerLocation(p)),locationFresh:partnerHasFreshLocation(p)}))
+    .map(p=>{
+      const distance=distanceKm(booking.location,partnerLocation(p));
+      return {...p,distanceKm:distance,locationFresh:partnerHasFreshLocation(p)};
+    })
+    .filter(p=>!p.currentBookingId
+      && !(booking.rejectedPartnerIds||[]).includes(p.id)
+      && partnerMatchesServiceArea(p,booking,p.distanceKm))
     .sort((a,b)=>{
+      // Prefer an eligible partner with a fresh location, then proximity,
+      // then lower active load, then higher rating.
       if(a.locationFresh!==b.locationFresh) return a.locationFresh?-1:1;
       const ad=a.distanceKm===null?Number.POSITIVE_INFINITY:a.distanceKm;
       const bd=b.distanceKm===null?Number.POSITIVE_INFINITY:b.distanceKm;
@@ -376,7 +400,7 @@ async function dispatchPendingBookingForPartner(partnerId){
   const partnerSnap=await partnerRef.get();
   if(!partnerSnap.exists)return null;
   const partner=partnerSnap.data()||{};
-  if(partner.approved!==true || partner.online!==true || partner.available===false || partner.currentBookingId)return null;
+  if(partner.approved!==true || partner.online!==true || partner.available!==true || partner.currentBookingId)return null;
   const categories=Array.isArray(partner.serviceCategories)?partner.serviceCategories.filter(Boolean).slice(0,30):[];
   if(!categories.length)return null;
 
@@ -400,7 +424,9 @@ async function dispatchPendingBookingForPartner(partnerId){
         const p=livePartnerSnap.data()||{};
         if(b.partnerId || b.status!== "searching_partner" ||
            (b.rejectedPartnerIds||[]).includes(partnerId) ||
-           p.approved!==true || p.online!==true || p.available===false || p.currentBookingId)return;
+           p.approved!==true || p.online!==true || p.available!==true || p.currentBookingId)return;
+        const dispatchDistance=distanceKm(b.location,partnerLocation(p));
+        if(!partnerMatchesServiceArea(p,b,dispatchDistance))return;
         tx.update(doc.ref,{
           partnerId,
           status:"partner_assigned",
@@ -466,7 +492,9 @@ exports.onBookingCreated=onDocumentCreated("bookings/{bookingId}",async(event)=>
         const partnerRef=db.collection("partners").doc(candidate.id);
         const partnerSnap=await tx.get(partnerRef);
         const livePartner=partnerSnap.data()||{};
-        if(livePartner.approved!==true || livePartner.online!==true || livePartner.available===false || livePartner.currentBookingId)return;
+        if(livePartner.approved!==true || livePartner.online!==true || livePartner.available!==true || livePartner.currentBookingId)return;
+        const liveDistance=distanceKm(currentBooking.location,partnerLocation(livePartner));
+        if(!partnerMatchesServiceArea(livePartner,currentBooking,liveDistance))return;
 
         tx.update(ref,{
           status:"partner_assigned",
@@ -576,7 +604,9 @@ exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
       const partnerSnap=await tx.get(partnerRef);
       const liveBooking=bookingSnap.data()||{};
       const livePartner=partnerSnap.data()||{};
-      if(liveBooking.partnerId || livePartner.currentBookingId || livePartner.approved!==true || livePartner.online!==true || livePartner.available===false)return;
+      if(liveBooking.partnerId || livePartner.currentBookingId || livePartner.approved!==true || livePartner.online!==true || livePartner.available!==true)return;
+      const reassignmentDistance=distanceKm(liveBooking.location,partnerLocation(livePartner));
+      if(!partnerMatchesServiceArea(livePartner,liveBooking,reassignmentDistance))return;
       tx.update(bookingRef,{partnerId:partner.id,status:"partner_assigned",dispatchedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
       tx.update(partnerRef,{currentBookingId:bookingId,updatedAt:FieldValue.serverTimestamp()});
     });
