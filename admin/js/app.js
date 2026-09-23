@@ -10,6 +10,19 @@ async function loadOperations(){if(!adminFunctions)return;try{const res=await ad
 async function setApproval(id,decision){if(!adminFunctions)return;const note=prompt('Optional review note:','')||'';try{await adminFunctions.httpsCallable('setPartnerApproval')({partnerId:id,decision,note});await loadOperations();toast('Partner status updated')}catch(e){toast(e.message||'Approval update failed')}}
 async function resolveCancellation(id,decision){if(!adminFunctions)return;const label=decision==='approve'?'approve this customer cancellation':'reject this customer cancellation';if(!confirm(label+'?'))return;try{await adminFunctions.httpsCallable('resolveBookingCancellation')({bookingId:id,decision});await loadOperations();toast('Cancellation updated')}catch(e){toast(e.message||'Cancellation update failed')}}
 async function verifyCompletionProof(id){if(!adminFunctions)return;if(!confirm('Verify the completion proof for this booking?'))return;const note=prompt('Optional verification note:','Verified by operations')||'';try{await adminFunctions.httpsCallable('verifyBookingCompletionProof')({bookingId:id,note});await loadOperations();toast('Completion proof verified')}catch(e){toast(e.message||'Proof verification failed')}}
+async function runLifecycleAudit(){
+  if(!adminFunctions)return;
+  try{
+    const res=await adminFunctions.httpsCallable('adminRunLifecycleAudit')({limit:100});
+    const data=res.data||{};
+    const summary=data.summary||{};
+    const issueCount=Number(summary.issueCount||0);
+    if(!issueCount){toast('Lifecycle audit passed — no integrity issues found');return}
+    const top=(data.issues||[]).slice(0,8).map(x=>x.type+': '+x.entityId).join('\n');
+    alert('Lifecycle audit found '+issueCount+' issue(s).\\n\\n'+top+(issueCount>8?'\\n\\nMore issues are available in the audit result.':''));
+    toast('Lifecycle audit found '+issueCount+' issue(s)');
+  }catch(e){toast(e.message||'Lifecycle audit failed')}
+}
 async function refreshDashboard(){await loadOperations()}
 async function adminLogin(){const email=prompt('Admin email:');if(!email)return;const password=prompt('Admin password:');if(!password)return;try{await adminAuth.signInWithEmailAndPassword(email.trim(),password);toast('Signed in');await loadOperations()}catch(e){toast(e.message||'Admin login failed')}}
 async function adminLogout(){if(adminAuth)await adminAuth.signOut()}
