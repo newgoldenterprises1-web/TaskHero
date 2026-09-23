@@ -122,3 +122,25 @@ Then open the local server URL from the browser/phone on the same network.
 ## Architecture lock
 
 See `ARCHITECTURE_LOCK.md`. That file is the canonical architecture constraint for future Near Family development.
+
+## Frontend separation rule
+
+Customer and Partner are separate applications and must stay separate.
+
+Do not:
+- merge Customer and Partner screens
+- merge Customer and Partner state into one frontend application
+- move the complete application into `index.html`
+- move the complete Partner app into `partner.html`
+- create excessively long entry files
+
+Do:
+- add Customer screens to `customer/pages/`
+- add Customer behavior/modules to `customer/js/`
+- add Customer styles to `customer/css/`
+- add Partner behavior/modules to `partner/js/`
+- add Partner styles to `partner/css/`
+- keep each file focused on one responsibility
+- keep entry HTML files lightweight
+
+Shared backend functions are allowed. Shared frontend application code is not a reason to merge the two apps.
