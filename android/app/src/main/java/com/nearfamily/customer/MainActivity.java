@@ -19,6 +19,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
+    private android.webkit.ValueCallback<Uri[]> pendingFileCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,11 +95,14 @@ public class MainActivity extends Activity {
                     android.webkit.ValueCallback<Uri[]> filePathCallback,
                     android.webkit.WebChromeClient.FileChooserParams fileChooserParams
             ) {
+                pendingFileCallback = filePathCallback;
                 Intent intent = fileChooserParams.createIntent();
                 try {
                     startActivityForResult(intent, 5101);
                 } catch (Exception ignored) {
-                    return false;
+                    pendingFileCallback = null;
+                    filePathCallback.onReceiveValue(null);
+                    return true;
                 }
                 return true;
             }
@@ -124,6 +128,27 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != 5101 || pendingFileCallback == null) return;
+
+        Uri[] result = null;
+        if (resultCode == RESULT_OK) {
+            if (data != null && data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                result = new Uri[count];
+                for (int i = 0; i < count; i++) {
+                    result[i] = data.getClipData().getItemAt(i).getUri();
+                }
+            } else if (data != null && data.getData() != null) {
+                result = new Uri[]{data.getData()};
+            }
+        }
+        pendingFileCallback.onReceiveValue(result);
+        pendingFileCallback = null;
+    }
+
+    @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
@@ -138,6 +163,10 @@ public class MainActivity extends Activity {
             webView.loadUrl("about:blank");
             webView.destroy();
             webView = null;
+        }
+        if (pendingFileCallback != null) {
+            pendingFileCallback.onReceiveValue(null);
+            pendingFileCallback = null;
         }
         super.onDestroy();
     }
