@@ -72,7 +72,7 @@ async function hydrateCustomerCloudData(){
     save();renderAll();
   }catch(e){console.warn('Customer cloud hydration unavailable; local data retained',e)}
 }
-async function startApp(){
+async async function startApp(){
   $('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');
   $('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';
   $('profileName').textContent=state.user?.name||'Customer';$('profilePhone').textContent=state.user?.phone||'';
@@ -114,7 +114,7 @@ function resetBookingForm(){
   $('photos').value='';
   state.familyBookingTarget=null;
 }
-function populateAddresses(){let a=[...new Set(state.addresses.filter(x=>String(x||'').trim()))];$('addressSelect').innerHTML='<option value="">Select saved address</option>'+a.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('')}
+function populateAddresses(){const a=state.addresses.map(x=>typeof x==='string'?x:(x?.address||'')).map(x=>String(x||'').trim()).filter(Boolean);const unique=[...new Set(a)];$('addressSelect').innerHTML='<option value="">Select saved address</option>'+unique.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('')}
 function updateFamilyOptions(){let fam=$('forWho').value==='Family';$('familySelect').classList.toggle('hide',!fam);const select=$('familySelect');select.innerHTML='';if(fam){state.families.forEach((f,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=String(f.name||'Family')+' — '+String(f.relationship||'Family');select.appendChild(option)})}if(fam&&!state.families.length){toast('Add a family member first.');closeBooking();openFamily();}}
 async function confirmBooking(){
   const s=state.selected,name=$('bookingName').value.trim(),phone=$('bookingPhone').value.trim(),addr=$('newAddress').value.trim()||$('addressSelect').value,date=$('bookingDate').value,time=$('bookingTime').value;
