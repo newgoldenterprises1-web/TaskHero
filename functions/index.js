@@ -583,6 +583,98 @@ async function findPartner(booking){
   return candidates[0]||null;
 }
 
+async function tryRedispatchBooking(bookingId,excludedPartnerId=null){
+  const ref=db.collection("bookings").doc(bookingId);
+  let assignedPartner=null;
+
+  for(let attempt=0;attempt<5;attempt++){
+    const snap=await ref.get();
+    if(!snap.exists)return null;
+    const booking=snap.data()||{};
+    const status=normalizeStatus(booking.status);
+    if(!["requested","searching_partner"].includes(status) || booking.partnerId)return booking.partnerId||null;
+
+    const candidates=await findPartners({
+      ...booking,
+      rejectedPartnerIds:[...(booking.rejectedPartnerIds||[]),...(excludedPartnerId?[excludedPartnerId]:[])]
+    });
+
+    let assigned=false;
+    for(const candidate of candidates){
+      try{
+        await db.runTransaction(async(tx)=>{
+          const liveBookingSnap=await tx.get(ref);
+          if(!liveBookingSnap.exists)return;
+          const liveBooking=liveBookingSnap.data()||{};
+          if(liveBooking.partnerId || !["requested","searching_partner"].includes(normalizeStatus(liveBooking.status)))return;
+          if((liveBooking.rejectedPartnerIds||[]).includes(candidate.id) || candidate.id===excludedPartnerId)return;
+
+          const partnerRef=db.collection("partners").doc(candidate.id);
+          const partnerSnap=await tx.get(partnerRef);
+          if(!partnerSnap.exists)return;
+          const partner=partnerSnap.data()||{};
+          if(partner.approved!==true || partner.online!==true || partner.available!==true || partner.currentBookingId)return;
+
+          const d=distanceKm(liveBooking.location,partnerLocation(partner));
+          if(!partnerMatchesServiceArea(partner,liveBooking,d))return;
+
+          tx.update(ref,{
+            partnerId:candidate.id,
+            status:"partner_assigned",
+            partnerAccepted:false,
+            dispatchedAt:FieldValue.serverTimestamp(),
+            reassignedAt:FieldValue.serverTimestamp(),
+            updatedAt:FieldValue.serverTimestamp()
+          });
+          tx.update(partnerRef,{
+            currentBookingId:bookingId,
+            updatedAt:FieldValue.serverTimestamp()
+          });
+          assigned=true;
+        });
+      }catch(err){
+        console.warn("Redispatch attempt failed",bookingId,candidate.id,err);
+      }
+      if(assigned){
+        assignedPartner=candidate;
+        break;
+      }
+    }
+
+    if(assignedPartner)break;
+
+    await ref.update({
+      status:"searching_partner",
+      updatedAt:FieldValue.serverTimestamp()
+    });
+    return null;
+  }
+
+  if(assignedPartner){
+    await notifyUser(
+      booking.customerId,
+      "Near Family — Partner reassigned",
+      "Your request has been reassigned to another available verified partner.",
+      {bookingId,status:"partner_assigned",partnerId:assignedPartner.id}
+    );
+    await notifyUser(
+      assignedPartner.id,
+      "New Near Family job",
+      "You have a reassigned service request.",
+      {bookingId,status:"partner_assigned"}
+    );
+    return assignedPartner.id;
+  }
+
+  await notifyUser(
+    booking.customerId,
+    "Near Family — Finding a new partner",
+    "Your previous partner is unavailable. We're finding another available verified partner.",
+    {bookingId,status:"searching_partner"}
+  );
+  return null;
+}
+
 async function dispatchPendingBookingForPartner(partnerId){
   const partnerRef=db.collection("partners").doc(partnerId);
   const partnerSnap=await partnerRef.get();
