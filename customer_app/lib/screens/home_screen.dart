@@ -23,6 +23,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String query = '';
 
+  static const _popularHeroImage = 'https://images.unsplash.com/photo-1773227060446-93239a553f1f?auto=format&fit=crop&w=1200&q=85';
+  static const _bulkHeroImage = 'https://images.unsplash.com/photo-1776905177849-9e1a4ae415b8?auto=format&fit=crop&w=1200&q=85';
+
   static const _serviceImages = <int, String>{
     1: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=900&auto=format&fit=crop',
     2: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=900&auto=format&fit=crop',
@@ -182,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.favorite_rounded,
                       accent: NFColors.peach,
                       action: 'View All Services',
-                      imageUrl: _serviceImages[1]!,
+                      imageUrl: _popularHeroImage,
                       onTap: () {
                         if (widget.state.services.isNotEmpty) {
                           Navigator.push(
@@ -206,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.groups_rounded,
                       accent: NFColors.earth,
                       action: 'Get Bulk Quote',
-                      imageUrl: _serviceImages[4]!,
+                      imageUrl: _bulkHeroImage,
                       onTap: widget.onOpenBulkOrders,
                     ),
                   ),
