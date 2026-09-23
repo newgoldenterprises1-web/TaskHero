@@ -72,17 +72,23 @@ service cloud.firestore {
       allow create: if owner(uid)
         && request.resource.data.keys().hasOnly([
           "name","phone","serviceCategories","online","available",
-          "approved","activeJobs","rating","createdAt","updatedAt"
+          "approved","activeJobs","rating","serviceRadiusKm","serviceAreas","skills","createdAt","updatedAt"
         ])
         && request.resource.data.approved == false
+        && (!request.resource.data.keys().hasAny(["serviceRadiusKm"]) || (request.resource.data.serviceRadiusKm is number && request.resource.data.serviceRadiusKm > 0 && request.resource.data.serviceRadiusKm <= 500))
+        && (!request.resource.data.keys().hasAny(["serviceAreas"]) || (request.resource.data.serviceAreas is list && request.resource.data.serviceAreas.size() <= 20))
+        && (!request.resource.data.keys().hasAny(["skills"]) || (request.resource.data.skills is list && request.resource.data.skills.size() <= 30))
         && request.resource.data.activeJobs == 0
         && request.resource.data.rating == 0;
       allow read: if admin() || owner(uid);
       allow update: if admin()
         || (owner(uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "name","phone","serviceCategories","online","available","partnerLocation","updatedAt"
-          ]));
+            "name","phone","serviceCategories","online","available","partnerLocation","serviceRadiusKm","serviceAreas","skills","updatedAt"
+          ])
+          && (!request.resource.data.keys().hasAny(["serviceRadiusKm"]) || (request.resource.data.serviceRadiusKm is number && request.resource.data.serviceRadiusKm > 0 && request.resource.data.serviceRadiusKm <= 500))
+          && (!request.resource.data.keys().hasAny(["serviceAreas"]) || (request.resource.data.serviceAreas is list && request.resource.data.serviceAreas.size() <= 20))
+          && (!request.resource.data.keys().hasAny(["skills"]) || (request.resource.data.skills is list && request.resource.data.skills.size() <= 30)));
       allow delete: if admin();
     }
 
