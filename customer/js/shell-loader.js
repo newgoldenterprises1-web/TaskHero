@@ -27,17 +27,15 @@
     'customer/js/location.js',
     'customer/js/notifications.js'
   ];
-  let index=0;
-  const loadNext=()=>{
-    if(index>=scripts.length){
-      if(typeof window.initNearFamily==='function')window.initNearFamily();
-      return;
-    }
-    const s=document.createElement('script');
-    s.src=scripts[index++];
-    s.onload=loadNext;
-    s.onerror=()=>{throw new Error('Failed to load '+s.src)};
-    document.body.appendChild(s);
-  };
-  loadNext();
+  function loadScript(src){
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src=src;
+      s.onload=resolve;
+      s.onerror=()=>reject(new Error('Failed to load '+src));
+      document.body.appendChild(s);
+    });
+  }
+  for(const src of scripts)await loadScript(src);
+  if(typeof window.initNearFamily==='function')window.initNearFamily();
 })().catch(e=>{console.error(e);document.body.innerHTML='<div style="padding:24px;font-family:system-ui">Near Family could not load. Please refresh.</div>';});
