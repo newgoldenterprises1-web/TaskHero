@@ -5,6 +5,15 @@ const {getFirestore,FieldValue}=require("firebase-admin/firestore");
 const {Timestamp}=require("firebase-admin/firestore");
 const {getMessaging}=require("firebase-admin/messaging");
 const {ACTIVE_STATUSES,normalizeStatus,canTransition}=require("./lib/lifecycle");
+const {SERVICE_CATALOG}=require("./lib/catalog");
+const {
+  assertText,
+  validClientRequestId,
+  bookingDocId,
+  assertAllowedFields,
+  validateBookingDate,
+  validateBookingLocation
+}=require("./lib/booking-validation");
 
 initializeApp();
 const db=getFirestore();
@@ -438,38 +447,11 @@ exports.adminRunLifecycleAudit=onCall(CALLABLE_OPTIONS,async(request)=>{
 
 exports.health=onCall(CALLABLE_OPTIONS,()=>({ok:true,service:"near-family-functions"}));
 
-const SERVICE_CATALOG={
-  "Parent Daily Assistance":{category:"Family Assistance",price:299},
-  "Hospital Companion":{category:"Health & Hospital",price:499},
-  "Medicine Pickup & Delivery":{category:"Pickups & Errands",price:149},
-  "Grocery & Essentials Pickup":{category:"Pickups & Errands",price:149},
-  "Electrician Visit":{category:"Home Services",price:199},
-  "Plumbing Assistance":{category:"Home Services",price:199},
-  "Laptop & Mobile Repair":{category:"Repairs & Maintenance",price:249},
-  "Appliance Repair":{category:"Repairs & Maintenance",price:299},
-  "Document Pickup & Submission":{category:"Pickups & Errands",price:199},
-  "Family Function Assistance":{category:"Events & Special Help",price:499},
-  "Doctor Appointment Assistance":{category:"Health & Hospital",price:299},
-  "Home Check & Small Tasks":{category:"Family Assistance",price:249}
-};
-
-function validClientRequestId(value){
-  const v=String(value||"").trim();
-  return v.length>=16 && v.length<=128 && /^[A-Za-z0-9._-]+$/.test(v);
-}
-function bookingDocId(uid,clientRequestId){
-  const crypto=require("crypto");
-  return crypto.createHash("sha256").update(uid+"|"+clientRequestId).digest("hex");
-}
-
 exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
   await rateLimit(request.auth.uid,"create");
   const data=request.data||{};
-  if(data===null || typeof data!=="object" || Array.isArray(data)) throw new Error("Invalid booking payload");
-  const allowed=["service","category","price","name","phone","for","forWho","familyMemberId","address","addressId","date","time","instructions","photos","location","clientRequestId"];
-  const keys=Object.keys(data);
-  if(keys.some(k=>!allowed.includes(k))) throw new Error("Invalid booking fields");
+  assertAllowedFields(data);
 
   const clientRequestId=String(data.clientRequestId||"").trim();
   if(!validClientRequestId(clientRequestId)) throw new Error("Invalid booking request id");
@@ -479,28 +461,19 @@ exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   const name=assertText(data.name,120,"Name");
   const phone=String(data.phone||"").trim();
   const address=String(data.address||"").trim();
-  const date=String(data.date||"").trim();
   const time=String(data.time||"").trim();
-  if(!service||!category||!name||phone.length<10||!address||!date||!time) throw new Error("Required booking details are missing");
-  if(service.length>160||category.length>120||name.length>120||phone.length>30||address.length>1000||date.length>40||time.length>80) throw new Error("Booking field is too long");
+  if(!service||!category||!name||phone.length<10||!address||!time) throw new Error("Required booking details are missing");
+  if(phone.length>30||address.length>1000||time.length>80) throw new Error("Booking field is too long");
 
   const catalog=SERVICE_CATALOG[service];
   if(!catalog || catalog.category!==category) throw new Error("Service is not available");
   const price=Number(data.price);
   if(price!==catalog.price) throw new Error("Invalid service price");
 
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) throw new Error("Invalid service date");
-  const requestedDate=new Date(date+"T00:00:00Z");
-  if(Number.isNaN(requestedDate.getTime())) throw new Error("Invalid service date");
-  const today=new Date();
-  const todayUtc=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate()));
-  if(requestedDate<todayUtc) throw new Error("Service date cannot be in the past");
+  const date=validateBookingDate(data.date);
 
   if(data.photos!==undefined && (!Array.isArray(data.photos) || data.photos.length)) throw new Error("Booking photos must be uploaded after booking creation");
-  if(data.location!==null && data.location!==undefined){
-    const lat=Number(data.location.lat),lng=Number(data.location.lng);
-    if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180) throw new Error("Invalid booking location");
-  }
+  const location=validateBookingLocation(data.location);
 
   const forWho=String(data.forWho||"Me").trim();
   if(!["Me","Family"].includes(forWho)) throw new Error("Invalid booking target");
@@ -553,7 +526,7 @@ exports.createBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
       address,addressId:addressId||null,date,time,
       instructions:String(data.instructions||"").slice(0,4000),
       photos:[],
-      location:data.location||null,
+      location:location||null,
       customerId:request.auth.uid,
       clientRequestId,
       status:"requested",
