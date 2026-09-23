@@ -84,7 +84,7 @@ async function updatePartnerLocation(){
 async function togglePartner(field){
  try{
    const next=!Boolean(partnerData[field]);
-   if(field==="online" && next) await updatePartnerLocation();
+   if(next && (field==="online" || field==="available")) await updatePartnerLocation();
    await NearFamilyBackend.db.collection("partners").doc(partnerUser.uid).set({[field]:next,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
  }catch(e){$("msg").textContent=e.message||String(e);}
 }
