@@ -46,13 +46,18 @@ New admin features should follow this separation.
 
 ## Backend
 
-- `functions/index.js` = Cloud Functions and server-authoritative business logic
+- `functions/index.js` = Cloud Functions entry points and orchestration
+- `functions/lib/lifecycle.js` = centralized booking state machine and transition rules
+- `functions/lib/catalog.js` = server-authoritative service catalogue and pricing
+- `functions/lib/booking-validation.js` = shared booking payload/date/location validation
 - `backend.js` = browser-side Firebase adapter
 - `firestore.rules` = Firestore authorization
 - `storage.rules` = Storage authorization
 - `firestore.indexes.json` = Firestore indexes
 
 Never move server authorization into browser-only code.
+
+For new backend feature logic, prefer a small module under `functions/lib/` when the logic is reusable or independently testable. Keep `functions/index.js` focused on callable/event orchestration rather than becoming another monolith.
 
 ## Feature placement
 
