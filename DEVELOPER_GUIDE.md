@@ -161,3 +161,13 @@ Do:
 - keep entry HTML files lightweight
 
 Shared backend functions are allowed. Shared frontend application code is not a reason to merge the two apps.
+
+## Customer frontend smoke check
+
+After changing Customer JavaScript or HTML fragments, run from the repository root:
+
+```powershell
+node customer/test/smoke.js
+```
+
+This checks Customer JS syntax and verifies that inline HTML handlers map to defined Customer functions.
