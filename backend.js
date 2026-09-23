@@ -110,6 +110,21 @@
       }
       return uploads;
     },
+    async updatePartnerProfile(data){
+      const u=await this.signIn();if(!u||!this.firebase.functions)return false;
+      const fn=this.firebase.functions().httpsCallable("updatePartnerProfile");
+      await fn(data||{});return true;
+    },
+    async updatePartnerAvailability(field,value){
+      const u=await this.signIn();if(!u||!this.firebase.functions)return false;
+      const fn=this.firebase.functions().httpsCallable("updatePartnerAvailability");
+      await fn({field,value:Boolean(value)});return true;
+    },
+    async updatePartnerLocation(lat,lng,accuracy){
+      const u=await this.signIn();if(!u||!this.firebase.functions)return false;
+      const fn=this.firebase.functions().httpsCallable("updatePartnerLocation");
+      await fn({lat,lng,accuracy});return true;
+    },
     async createBooking(data){
       const u=await this.signIn();if(!u||!this.firebase.functions)return null;
       const fn=this.firebase.functions().httpsCallable("createBooking");
