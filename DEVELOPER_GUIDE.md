@@ -44,6 +44,14 @@ Keep reusable styling here rather than creating a giant inline style section in 
 
 New admin features should follow this separation.
 
+## Partner app
+
+- `partner.html` = partner shell/markup
+- `partner/js/app.js` = partner behavior and Firebase interactions
+- `partner/css/app.css` = partner styling
+
+Keep new partner features in these separate files. Do not move the full partner application back into `partner.html`.
+
 ## Backend
 
 - `functions/index.js` = Cloud Functions entry points and orchestration
