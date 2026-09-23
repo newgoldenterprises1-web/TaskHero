@@ -1,0 +1,61 @@
+plugins {
+    id "com.android.application"
+}
+
+def webSourceDir = rootProject.projectDir.parentFile
+def generatedWebAssets = layout.buildDirectory.dir("generated/customerWebAssets").get().asFile
+
+def syncCustomerWebAssets = tasks.register("syncCustomerWebAssets", Sync) {
+    from(webSourceDir) {
+        include "index.html"
+        include "backend.js"
+        include "firebase-config.js"
+        include "firebase-messaging-sw.js"
+        include "manifest.webmanifest"
+        include "customer/**"
+        include "assets/**"
+    }
+    into(generatedWebAssets)
+}
+
+android {
+    namespace "com.nearfamily.customer"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.nearfamily.customer"
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir(generatedWebAssets)
+        }
+    }
+
+    lint {
+        abortOnError true
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(syncCustomerWebAssets)
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.17.0"
+}

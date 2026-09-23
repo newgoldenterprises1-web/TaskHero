@@ -96,3 +96,10 @@ This checks Customer JavaScript syntax and inline HTML handlers.
 ## Important
 
 Firebase configuration is still environment-dependent. Local fallback mode can run, but real OTP, Firestore, Storage and push notifications require the project's actual Firebase configuration and deployment.
+
+
+## Android phone app
+
+The Customer app can be run as a native Android app through the `android/` wrapper. Open `android/` in Android Studio, connect the USB-debugging phone, and run the `app` configuration.
+
+The wrapper packages the modular Customer frontend into the APK at build time and loads it through Android's secure WebViewAssetLoader origin. Android's documentation recommends WebViewAssetLoader for local web content instead of `file://` access. cite-placeholder

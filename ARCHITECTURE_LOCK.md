@@ -120,3 +120,14 @@ Every customer UI screen or independently meaningful UI component must have its 
 Wrapper files may only contain layout slots or composition markup. They must not contain the complete child screens.
 
 The same principle applies to Partner and Admin: keep entry files lightweight and place feature UI and logic in focused files.
+
+
+## Android app wrapper
+
+The Customer app also has a separate native Android wrapper under `android/`.
+
+Rules:
+1. Keep the Android wrapper separate from `customer/` frontend source.
+2. The Android wrapper may package the existing Customer frontend into APK assets at build time.
+3. Do not move Customer screens, modules, or styles into a single Android Activity.
+4. Keep native Android responsibilities under `android/`; keep Customer UI and feature logic under `customer/`.
