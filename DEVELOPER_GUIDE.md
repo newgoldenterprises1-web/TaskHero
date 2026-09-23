@@ -52,6 +52,17 @@ New admin features should follow this separation.
 
 Keep new partner features in these separate files. Do not move the full partner application back into `partner.html`.
 
+## Customer vs Partner separation
+
+Customer and Partner are independent frontend applications.
+
+- Customer entry: `index.html`
+- Customer files: `customer/pages/`, `customer/js/`, `customer/css/`
+- Partner entry: `partner.html`
+- Partner files: `partner/js/`, `partner/css/`
+
+Do not merge their frontend screens, shells, state, navigation, or UI components. Shared Firebase/backend functions are allowed only at the service/API layer. Keep the two frontend applications independent.
+
 ## Backend
 
 - `functions/index.js` = Cloud Functions entry points and orchestration
