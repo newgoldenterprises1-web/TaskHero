@@ -1,13 +1,18 @@
-function go(page){['home','bookings','family','profile'].forEach(x=>{let p=$(x+'Page');if(p)p.classList.toggle('hide',x!==page)});$('homePage').classList.toggle('hide',page!=='home');document.querySelectorAll('.nav').forEach((n,i)=>n.classList.remove('text-[#176b5b]','font-bold'));renderAll();window.scrollTo(0,0)}
+function go(page){
+  ['home','bookings','family','profile'].forEach(x=>{
+    const p=$(x+'Page');
+    if(p)p.classList.toggle('hide',x!==page);
+  });
+  document.querySelectorAll('.nav').forEach(n=>n.classList.remove('text-[#176b5b]','font-bold','text-slate-400'));
+  const activeIndex={home:0,bookings:2,family:3,profile:4}[page];
+  const active=document.querySelectorAll('.nav')[activeIndex];
+  if(active)active.classList.add('text-[#176b5b]','font-bold');
+  document.querySelectorAll('.nav').forEach((n,i)=>{if(i!==activeIndex)n.classList.add('text-slate-400')});
+  renderAll();
+  window.scrollTo(0,0);
+}
 
-function focusSearch(){go('home');setTimeout(()=>$('search').focus(),100)}
-
-function renderCategories(){ $('categories').innerHTML=CATS.map(x=>`<button onclick="setCategory('${x[0]}')" class="bg-white border border-[#dcefe7] rounded-2xl p-4 text-left soft hover:-translate-y-0.5 transition"><div class="w-9 h-9 rounded-xl bg-[#dcefe7] flex items-center justify-center text-[#176b5b]">${x[1]}</div><b class="block text-xs mt-3">${x[0]}</b></button>`).join('') }
-
-function setCategory(c){state.cat=c;go('home');renderServices()}
-
-function renderServices(){let q=($('search')?.value||'').toLowerCase();let arr=SERVICES.filter(s=>(state.cat==='all'||s.c===state.cat)&&(!q||s.n.toLowerCase().includes(q)||s.c.toLowerCase().includes(q)||s.d.toLowerCase().includes(q)));$('services').innerHTML=arr.length?arr.map(s=>`<article class="bg-white border border-[#dcefe7] rounded-3xl overflow-hidden soft hover:-translate-y-0.5 transition"><img src="${s.i}" class="w-full h-40 object-cover" alt="${s.n}"><div class="p-4"><div class="text-[10px] font-bold text-[#176b5b]">${s.c}</div><h3 class="font-black mt-1">${s.n}</h3><p class="text-xs text-slate-500 mt-1 line-clamp-2">${s.d}</p><div class="flex justify-between items-center mt-4"><div><span class="font-black text-lg">₹${s.p}</span><span class="text-[10px] text-slate-400"> starting</span></div><button onclick="openService(${s.id})" class="bg-[#176b5b] text-white px-4 py-2 rounded-xl text-xs font-bold">View</button></div></div></article>`).join(''):`<div class="col-span-full text-center bg-white rounded-3xl p-10 text-slate-500">No matching services found.</div>`}
-
-function openService(id){let s=SERVICES.find(x=>x.id===id);if(!s)return;state.selected=s;$('serviceDetail').innerHTML=`<img src="${s.i}" class="w-full h-48 object-cover rounded-2xl"><div class="text-xs text-[#176b5b] font-bold mt-4">${s.c}</div><h2 class="text-2xl font-black mt-1">${s.n}</h2><p class="text-sm text-slate-500 mt-2">${s.d}</p><div class="mt-5 bg-[#f7fcfa] rounded-2xl p-4"><b>What's included</b><ul class="text-xs text-slate-600 mt-2 space-y-2"><li>✓ Verified partner assignment</li><li>✓ Service coordination</li><li>✓ Status updates</li><li>✓ Support if something changes</li></ul></div><div class="flex justify-between items-center mt-5"><b class="text-2xl">₹${s.p}</b><button onclick="openBooking()" class="bg-[#176b5b] text-white font-black px-6 py-3 rounded-xl">Book Now</button></div>`;$('serviceModal').classList.add('show')}
-
-function closeService(){$('serviceModal').classList.remove('show')}
+function focusSearch(){
+  go('home');
+  setTimeout(()=>$('search').focus(),100);
+}
