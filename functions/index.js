@@ -1119,6 +1119,66 @@ exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
   return {ok:true,...result};
 });
 
+function completionStoragePath(proofUrl,bookingId){
+  const url=String(proofUrl||"");
+  if(!(url.startsWith("https://firebasestorage.googleapis.com/")||url.startsWith("https://firebasestorage.app/")))return null;
+  const marker="/o/";
+  const start=url.indexOf(marker);
+  if(start<0)return null;
+  const encodedPath=url.slice(start+marker.length).split("?")[0];
+  let path;
+  try{path=decodeURIComponent(encodedPath)}catch(e){return null}
+  const prefix="bookings/"+bookingId+"/completion/";
+  return path.startsWith(prefix)?path:null;
+}
+
+exports.verifyBookingCompletionProof=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const adminUid=requireAdmin(request);
+  const bookingId=String(request.data?.bookingId||"").trim();
+  const note=String(request.data?.note||"").trim().slice(0,1000);
+  if(!bookingId||bookingId.length>128)throw new Error("Invalid bookingId");
+
+  const ref=db.collection("bookings").doc(bookingId);
+  const snap=await ref.get();
+  if(!snap.exists)throw new Error("Booking not found");
+  const booking=snap.data()||{};
+  if(normalizeStatus(booking.status)!=="completed")throw new Error("Booking is not completed");
+  const proofUrl=String(booking.completionProofUrl||"");
+  if(!proofUrl)throw new Error("Completion proof is missing");
+
+  const storagePath=completionStoragePath(proofUrl,bookingId);
+  if(!storagePath)throw new Error("Completion proof does not belong to this booking");
+
+  let exists=true;
+  try{
+    const bucket=require("firebase-admin/storage").getStorage().bucket();
+    const result=await bucket.file(storagePath).exists();
+    exists=result[0]===true;
+  }catch(err){
+    console.error("Completion proof existence check failed",err);
+    throw new Error("Completion proof could not be verified");
+  }
+  if(!exists)throw new Error("Completion proof file was not found");
+
+  await ref.update({
+    completionProofVerified:true,
+    completionProofVerifiedBy:adminUid,
+    completionProofVerifiedAt:FieldValue.serverTimestamp(),
+    completionProofVerificationNote:note,
+    updatedAt:FieldValue.serverTimestamp()
+  });
+
+  await auditSecurityEvent({
+    type:"booking_completion_proof_verified",
+    uid:adminUid,
+    bookingId,
+    metadata:{storagePath,note}
+  });
+
+  return {ok:true,bookingId,verified:true};
+});
+
+
 exports.requestBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
   if(!request.auth) throw new Error("Authentication required");
   const bookingId=String(request.data?.bookingId||"");
