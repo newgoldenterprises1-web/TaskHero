@@ -117,11 +117,9 @@
       return result?.data?.id||null;
     },
     async attachBookingPhotos(bookingId,photos){
-      const u=await this.signIn();if(!u||!photos?.length)return false;
-      await this.db.collection("bookings").doc(bookingId).update({
-        photos,
-        updatedAt:this.firebase.firestore.FieldValue.serverTimestamp()
-      });
+      const u=await this.signIn();if(!u||!this.firebase.functions||!photos?.length)return false;
+      const fn=this.firebase.functions().httpsCallable("attachBookingPhotos");
+      await fn({bookingId,photos:Array.from(photos).slice(0,5)});
       return true;
     },
     async requestBookingCancellation(bookingId){
