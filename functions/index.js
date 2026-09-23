@@ -199,31 +199,102 @@ exports.setPartnerApproval=onCall(CALLABLE_OPTIONS,async(request)=>{
   const decision=String(request.data?.decision||"").toLowerCase();
   const note=String(request.data?.note||"").trim().slice(0,1000);
   if(!partnerId || partnerId.length>128 || !["approve","reject","suspend"].includes(decision)) throw new Error("Invalid partner approval request");
-  const ref=db.collection("partners").doc(partnerId);
-  const snap=await ref.get();
-  if(!snap.exists) throw new Error("Partner not found");
-  const patch={
-    approved:decision==="approve",
-    approvalStatus:decision==="approve"?"approved":decision==="suspend"?"suspended":"rejected",
-    approvalNote:note,
-    reviewedBy:adminUid,
-    reviewedAt:FieldValue.serverTimestamp(),
-    updatedAt:FieldValue.serverTimestamp()
-  };
-  if(decision!=="approve"){patch.online=false;patch.available=false;}
-  await ref.update(patch);
+
+  const partnerRef=db.collection("partners").doc(partnerId);
+  const result={partnerId,status:decision==="approve"?"approved":decision==="suspend"?"suspended":"rejected",releasedBookingId:null};
+
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(partnerRef);
+    if(!snap.exists) throw new Error("Partner not found");
+    const partner=snap.data()||{};
+
+    const patch={
+      approved:decision==="approve",
+      approvalStatus:result.status,
+      approvalNote:note,
+      reviewedBy:adminUid,
+      reviewedAt:FieldValue.serverTimestamp(),
+      updatedAt:FieldValue.serverTimestamp()
+    };
+
+    if(decision==="approve"){
+      tx.update(partnerRef,patch);
+      return;
+    }
+
+    patch.online=false;
+    patch.available=false;
+    tx.update(partnerRef,patch);
+
+    const bookingId=String(partner.currentBookingId||"").trim();
+    if(!bookingId)return;
+
+    const bookingRef=db.collection("bookings").doc(bookingId);
+    const bookingSnap=await tx.get(bookingRef);
+    if(!bookingSnap.exists)return;
+
+    const booking=bookingSnap.data()||{};
+    if(booking.partnerId!==partnerId || !ACTIVE_STATUSES.has(normalizeStatus(booking.status)))return;
+
+    if(booking.partnerAccepted===true){
+      tx.update(bookingRef,{
+        partnerId:FieldValue.delete(),
+        partnerAccepted:false,
+        status:"searching_partner",
+        partnerSuspendedAt:FieldValue.serverTimestamp(),
+        partnerSuspendedBy:adminUid,
+        updatedAt:FieldValue.serverTimestamp()
+      });
+      result.releasedBookingId=bookingId;
+    }else{
+      tx.update(bookingRef,{
+        partnerId:FieldValue.delete(),
+        status:"searching_partner",
+        partnerSuspendedAt:FieldValue.serverTimestamp(),
+        partnerSuspendedBy:adminUid,
+        updatedAt:FieldValue.serverTimestamp()
+      });
+      result.releasedBookingId=bookingId;
+    }
+
+    tx.update(partnerRef,{
+      currentBookingId:FieldValue.delete(),
+      activeJobs:Math.max(0,Number(partner.activeJobs||0)-(booking.partnerAccepted===true?1:0)),
+      updatedAt:FieldValue.serverTimestamp()
+    });
+  });
+
   await db.collection("users").doc(partnerId).set({
-    partnerApprovalStatus:patch.approvalStatus,
+    partnerApprovalStatus:result.status,
     partnerApprovalNote:note,
     updatedAt:FieldValue.serverTimestamp()
   },{merge:true});
-  await notifyUser(partnerId,"Near Family — Partner application update",
-    decision==="approve"?"Your partner account has been approved.":"Your partner account status was updated by Near Family operations.",
-    {partnerId,status:patch.approvalStatus});
-  await auditSecurityEvent({type:"partner_approval_changed",uid:adminUid,partnerId,decision});
-  return {ok:true,partnerId,status:patch.approvalStatus};
-});
 
+  await notifyUser(
+    partnerId,
+    "Near Family — Partner account update",
+    decision==="approve"
+      ? "Your partner account has been approved."
+      : result.releasedBookingId
+        ? "Your partner account was suspended and your active booking was released for reassignment."
+        : "Your partner account status was updated by Near Family operations.",
+    {partnerId,status:result.status,releasedBookingId:result.releasedBookingId}
+  );
+
+  if(result.releasedBookingId){
+    await tryRedispatchBooking(result.releasedBookingId,partnerId);
+  }
+
+  await auditSecurityEvent({
+    type:"partner_approval_changed",
+    uid:adminUid,
+    partnerId,
+    decision,
+    releasedBookingId:result.releasedBookingId
+  });
+
+  return {ok:true,...result};
+});
 const ACTIVE_STATUSES=new Set(["requested","partner_assigned","partner_on_the_way","service_started"]);
 const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_");
 
