@@ -4,6 +4,7 @@ const {initializeApp}=require("firebase-admin/app");
 const {getFirestore,FieldValue}=require("firebase-admin/firestore");
 const {Timestamp}=require("firebase-admin/firestore");
 const {getMessaging}=require("firebase-admin/messaging");
+const {ACTIVE_STATUSES,normalizeStatus,canTransition}=require("./lib/lifecycle");
 
 initializeApp();
 const db=getFirestore();
@@ -297,9 +298,6 @@ exports.setPartnerApproval=onCall(CALLABLE_OPTIONS,async(request)=>{
 
   return {ok:true,...result};
 });
-const ACTIVE_STATUSES=new Set(["requested","partner_assigned","partner_on_the_way","service_started"]);
-const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_");
-
 exports.adminRunLifecycleAudit=onCall(CALLABLE_OPTIONS,async(request)=>{
   const adminUid=requireAdmin(request);
   const limitCount=Math.min(200,Math.max(20,Number(request.data?.limit||100)));
@@ -1102,7 +1100,7 @@ exports.rejectBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(!snap.exists) throw new Error("Booking not found");
     const b=snap.data()||{};
     if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
-    if(!["partner_assigned","requested","searching_partner"].includes(b.status) || b.partnerAccepted===true) throw new Error("Booking cannot be rejected now");
+    if(b.status!=="partner_assigned" || b.partnerAccepted===true) throw new Error("Booking cannot be rejected now");
     const oldPartnerRef=db.collection("partners").doc(uid);
     const oldPartnerSnap=await tx.get(oldPartnerRef);
     const oldPartner=oldPartnerSnap.data()||{};
@@ -1151,7 +1149,7 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
     const b=snap.data()||{};
     if(b.partnerId!==uid) throw new Error("Booking is not assigned to this partner");
     if(b.partnerAccepted!==true) throw new Error("Partner must accept the booking before changing its status");
-    if(!(allowed[b.status]||[]).includes(next)) throw new Error("Invalid status transition");
+    if(!canTransition(b.status,next) || !(allowed[b.status]||[]).includes(next)) throw new Error("Invalid status transition");
     const patch={status:next,updatedAt:FieldValue.serverTimestamp()};
     if(next==="partner_on_the_way")patch.onTheWayAt=FieldValue.serverTimestamp();
     if(next==="service_started")patch.serviceStartedAt=FieldValue.serverTimestamp();
@@ -1336,7 +1334,7 @@ exports.requestBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(!snap.exists) throw new Error("Booking not found");
     const b=snap.data()||{};
     if(b.customerId!==request.auth.uid) throw new Error("Not your booking");
-    if(["completed","cancelled","cancellation_requested"].includes(b.status)) throw new Error("Booking cannot be cancelled now");
+    if(!canTransition(b.status,"cancellation_requested")) throw new Error("Booking cannot be cancelled now");
     partnerId=b.partnerId||null;
     tx.update(ref,{
       status:"cancellation_requested",
