@@ -1,3 +1,20 @@
+## Customer JavaScript modules
+
+Customer application logic is intentionally split into focused files:
+
+- `customer/js/app.js` = shared state and small core utilities
+- `customer/js/catalog.js` = customer service catalogue
+- `customer/js/auth.js` = customer authentication/session flow
+- `customer/js/navigation.js` = navigation, categories and service browsing
+- `customer/js/booking.js` = booking form, tracking, cancellation and rebooking
+- `customer/js/family.js` = Help for My Family
+- `customer/js/profile.js` = saved addresses and support
+- `customer/js/location.js` = device/manual location
+- `customer/js/notifications.js` = realtime booking sync and notifications
+- `customer/js/shell-loader.js` = ordered script/module loader
+
+Do not put all customer behavior back into `customer/js/app.js`.
+
 # Near Family Developer Guide
 
 ## Architecture principle
