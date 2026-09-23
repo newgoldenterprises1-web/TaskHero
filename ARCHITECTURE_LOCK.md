@@ -24,6 +24,15 @@ Customer screens, sections, modals, styles, and application logic must remain in
 - `customer/js/app.js`
 - `customer/js/shell-loader.js`
 
+## Partner application
+
+Partner UI is also multi-file:
+- `partner.html` = shell/markup
+- `partner/js/app.js` = partner logic
+- `partner/css/app.css` = partner styling
+
+Do not merge the partner application back into a monolithic `partner.html`.
+
 ## Admin application
 
 Admin UI logic and styling remain separated:
