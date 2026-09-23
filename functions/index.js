@@ -369,9 +369,14 @@ async function findPartners(booking){
     .where("online","==",true)
     .where("approved","==",true)
     .where("available","==",true)
-    .where("serviceCategories","array-contains",booking.category||"")
     .limit(100).get();
+  const category=String(booking.category||"").trim();
   return snap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(p=>{
+      const categories=Array.isArray(p.serviceCategories)?p.serviceCategories:[];
+      const skills=Array.isArray(p.skills)?p.skills:[];
+      return categories.includes(category)||skills.includes(category);
+    })
     .map(p=>{
       const distance=distanceKm(booking.location,partnerLocation(p));
       return {...p,distanceKm:distance,locationFresh:partnerHasFreshLocation(p)};
@@ -458,13 +463,16 @@ async function dispatchPendingBookingForPartner(partnerId){
 exports.onPartnerAvailabilityUpdated=onDocumentUpdated("partners/{partnerId}",async(event)=>{
   const before=event.data.before.data()||{};
   const after=event.data.after.data()||{};
-  const becameEligible=after.approved===true && after.online===true && after.available!==false && !after.currentBookingId;
+  const becameEligible=after.approved===true && after.online===true && after.available===true && !after.currentBookingId;
   if(!becameEligible)return;
   const relevantChange=
     before.approved!==after.approved ||
     before.online!==after.online ||
     before.available!==after.available ||
     before.currentBookingId!==after.currentBookingId ||
+    Number(before.serviceRadiusKm||0)!==Number(after.serviceRadiusKm||0) ||
+    JSON.stringify(before.serviceAreas||[])!==JSON.stringify(after.serviceAreas||[]) ||
+    JSON.stringify(before.skills||[])!==JSON.stringify(after.skills||[]) ||
     JSON.stringify(before.serviceCategories||[])!==JSON.stringify(after.serviceCategories||[]) ||
     JSON.stringify(before.partnerLocation||null)!==JSON.stringify(after.partnerLocation||null);
   if(!relevantChange)return;
