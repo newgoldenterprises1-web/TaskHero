@@ -1,0 +1,4 @@
+:root{--sage:#dcefe7;--sage2:#a9d8c8;--teal:#176b5b;--deep:#123c36;--cream:#f7fcfa;--muted:#638079}
+body{margin:0;background:var(--cream);color:var(--deep);font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+.soft{box-shadow:0 12px 35px rgba(23,107,91,.08)}
+.nav-active{background:#dcefe7;color:#176b5b;font-weight:800}
