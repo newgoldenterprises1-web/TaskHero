@@ -117,6 +117,12 @@ async function setupPartnerPush(){
   if(token) $("msg").textContent="Notifications enabled for job updates.";
  }catch(e){console.warn("Partner push unavailable",e);}
 }
+async function resolveCancellation(id,decision){
+ const label=decision==="approve"?"approve the cancellation":"reject the cancellation";
+ if(!confirm("Do you want to "+label+"?"))return;
+ try{await NearFamilyBackend.resolveBookingCancellation(id,decision);await loadRequests();openActive(id);}
+ catch(e){alert(e.message||String(e));}
+}
 async function acceptJob(id){
  try{await functionsApi().httpsCallable("acceptBooking")({bookingId:id});await loadRequests();openActive(id);}catch(e){alert(e.message||String(e));}
 }
@@ -128,7 +134,8 @@ async function openActive(id){
  const b=await NearFamilyBackend.getBooking(id); if(!b)return;
  $("activeSection").classList.remove("hidden");$("activeStatus").textContent=pretty(b.status);$("activeStatus").className=statusClass(b.status);
  let action="";
- if(b.status==="partner_assigned"&&b.partnerAccepted)action='<button onclick="moveStatus(\''+b.id+'\',\'partner_on_the_way\')" class="px-4 py-3 rounded-xl bg-[#176b5b] text-white text-sm font-bold">Start Navigation / On the way</button>';
+ if(b.status==="cancellation_requested")action='<div class="space-y-2"><p class="text-sm text-amber-700 font-bold">Customer requested cancellation.</p><div class="flex gap-2"><button onclick="resolveCancellation(\''+b.id+'\',\'approve\')" class="px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm font-bold">Approve Cancellation</button><button onclick="resolveCancellation(\''+b.id+'\',\'reject\')" class="px-4 py-3 rounded-xl bg-[#176b5b] text-white text-sm font-bold">Reject Cancellation</button></div></div>';
+ else if(b.status==="partner_assigned"&&b.partnerAccepted)action='<button onclick="moveStatus(\''+b.id+'\',\'partner_on_the_way\')" class="px-4 py-3 rounded-xl bg-[#176b5b] text-white text-sm font-bold">Start Navigation / On the way</button>';
  else if(b.status==="partner_on_the_way")action='<button onclick="moveStatus(\''+b.id+'\',\'service_started\')" class="px-4 py-3 rounded-xl bg-[#176b5b] text-white text-sm font-bold">Start Service</button>';
  else if(b.status==="service_started")action='<div class="space-y-3"><input id="proof_'+b.id+'" type="file" accept="image/*" class="w-full border border-[#dcefe7] rounded-xl p-3 text-sm"><textarea id="notes_'+b.id+'" class="w-full border border-[#dcefe7] rounded-xl p-3 text-sm" placeholder="Completion notes"></textarea><button onclick="completeJob(\''+b.id+'\')" class="px-4 py-3 rounded-xl bg-[#176b5b] text-white text-sm font-bold">Upload proof & Complete</button></div>';
  else if(b.status==="completed")action='<div class="text-sm text-[#176b5b] font-bold">✓ Job completed</div>';
