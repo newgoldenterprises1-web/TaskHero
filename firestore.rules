@@ -59,11 +59,8 @@ service cloud.firestore {
         resource.data.partnerId == request.auth.uid
       ));
 
-      allow update: if admin()
-        || (signedIn()
-          && resource.data.customerId == request.auth.uid
-          && request.resource.data.customerId == resource.data.customerId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["photos","updatedAt"]));
+      // Booking lifecycle and photo metadata are server-authoritative Cloud Function writes.
+      allow update: if admin();
 
       allow delete: if admin();
     }
