@@ -16,5 +16,14 @@
   document.getElementById('appHeader').innerHTML=header;
   document.getElementById('customerPages').innerHTML=home+bookings+family+profile;
   document.getElementById('customerNav').innerHTML=nav;
-  const s=document.createElement('script');s.src='customer/js/app.js';s.onload=()=>window.initNearFamily();document.body.appendChild(s);
+  const catalogScript=document.createElement('script');
+  catalogScript.src='customer/js/catalog.js';
+  catalogScript.onload=()=>{
+    const appScript=document.createElement('script');
+    appScript.src='customer/js/app.js';
+    appScript.onload=()=>window.initNearFamily();
+    document.body.appendChild(appScript);
+  };
+  catalogScript.onerror=()=>{throw new Error('Failed to load customer catalog')};
+  document.body.appendChild(catalogScript);
 })().catch(e=>{console.error(e);document.body.innerHTML='<div style="padding:24px;font-family:system-ui">Near Family could not load. Please refresh.</div>';});
