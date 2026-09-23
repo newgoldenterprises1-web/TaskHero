@@ -678,6 +678,67 @@ async function requirePartner(request){
   return {uid:request.auth.uid,partner};
 }
 
+exports.updatePartnerProfile=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const {uid}=await requirePartner(request);
+  const data=request.data||{};
+  const name=String(data.name||"").trim();
+  const phone=String(data.phone||"").trim();
+  const serviceCategories=Array.isArray(data.serviceCategories)
+    ? [...new Set(data.serviceCategories.map(x=>String(x||"").trim()).filter(Boolean))].slice(0,12)
+    : [];
+  const allowedCategories=["Family Assistance","Home Services","Health & Hospital","Pickups & Errands","Repairs & Maintenance","Events & Special Help"];
+  if(name.length>120 || phone.length>30 || serviceCategories.some(x=>!allowedCategories.includes(x))) throw new Error("Invalid partner profile");
+  if(!name || phone.length<10 || !serviceCategories.length) throw new Error("Name, phone and at least one service category are required");
+  const ref=db.collection("partners").doc(uid);
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists) throw new Error("Partner profile not found");
+    const p=snap.data()||{};
+    if(p.approved===true && serviceCategories.length===0) throw new Error("Approved partners need a service category");
+    tx.update(ref,{name,phone,serviceCategories,updatedAt:FieldValue.serverTimestamp()});
+  });
+  await auditSecurityEvent({type:"partner_profile_updated",uid});
+  return {ok:true};
+});
+
+exports.updatePartnerAvailability=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const {uid}=await requirePartner(request);
+  const field=String(request.data?.field||"");
+  const next=request.data?.value===true;
+  if(!["online","available"].includes(field)) throw new Error("Invalid availability field");
+  const ref=db.collection("partners").doc(uid);
+  let result;
+  await db.runTransaction(async(tx)=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists) throw new Error("Partner profile not found");
+    const p=snap.data()||{};
+    if(p.approved!==true) throw new Error("Partner is not approved yet");
+    if(next && !p.partnerLocation) throw new Error("Current location is required before going online");
+    if(field==="available" && next && p.online!==true) throw new Error("Partner must be online before becoming available");
+    if(field==="online" && !next && p.available===true){
+      tx.update(ref,{online:false,available:false,updatedAt:FieldValue.serverTimestamp()});
+      result={online:false,available:false};
+      return;
+    }
+    tx.update(ref,{[field]:next,updatedAt:FieldValue.serverTimestamp()});
+    result={online:field==="online"?next:p.online,available:field==="available"?next:p.available};
+  });
+  await auditSecurityEvent({type:"partner_availability_changed",uid,field,value:next});
+  return result;
+});
+
+exports.updatePartnerLocation=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const {uid}=await requirePartner(request);
+  const lat=Number(request.data?.lat),lng=Number(request.data?.lng),accuracy=Number(request.data?.accuracy||0);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180||!Number.isFinite(accuracy)||accuracy<0||accuracy>10000) throw new Error("Invalid partner location");
+  const ref=db.collection("partners").doc(uid);
+  await ref.update({
+    partnerLocation:{lat:Number(lat.toFixed(6)),lng:Number(lng.toFixed(6)),accuracy:Math.round(accuracy),updatedAt:FieldValue.serverTimestamp()},
+    updatedAt:FieldValue.serverTimestamp()
+  });
+  return {ok:true};
+});
+
 exports.acceptBooking=onCall(CALLABLE_OPTIONS,async(request)=>{
   const {uid}=await requirePartner(request);
   const bookingId=String(request.data?.bookingId||"");
