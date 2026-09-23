@@ -8,6 +8,7 @@ class NFColors {
   static const surface = Color(0xFFF7FCFA);
   static const border = Color(0xFFDCEFE7);
   static const muted = Color(0xFF638079);
+  static const earth = Color(0xFF6D4C41);
 }
 
 ThemeData buildNearFamilyTheme() {
