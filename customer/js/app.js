@@ -4,9 +4,8 @@ let state={user:JSON.parse(localStorage.getItem('nf_user')||'null'),families:JSO
 
 function save(){localStorage.setItem('nf_user',JSON.stringify(state.user));localStorage.setItem('nf_families',JSON.stringify(state.families));localStorage.setItem('nf_addresses',JSON.stringify(state.addresses));localStorage.setItem('nf_bookings',JSON.stringify(state.bookings))}
 function $(id){return document.getElementById(id)}
-
-function $(id){return document.getElementById(id)}
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2200)}
+function closeSuccess(){$('successModal')?.classList.remove('show')}
 
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
 
