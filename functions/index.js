@@ -298,6 +298,144 @@ exports.setPartnerApproval=onCall(CALLABLE_OPTIONS,async(request)=>{
 const ACTIVE_STATUSES=new Set(["requested","partner_assigned","partner_on_the_way","service_started"]);
 const normalizeStatus=s=>String(s||"requested").toLowerCase().replace(/\s+/g,"_");
 
+exports.adminRunLifecycleAudit=onCall(CALLABLE_OPTIONS,async(request)=>{
+  const adminUid=requireAdmin(request);
+  const limitCount=Math.min(200,Math.max(20,Number(request.data?.limit||100)));
+
+  const [bookingsSnap,partnersSnap]=await Promise.all([
+    db.collection("bookings").orderBy("createdAt","desc").limit(limitCount).get(),
+    db.collection("partners").orderBy("createdAt","desc").limit(limitCount).get()
+  ]);
+
+  const bookings=bookingsSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const partners=partnersSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const partnerMap=new Map(partners.map(p=>[p.id,p]));
+  const bookingMap=new Map(bookings.map(b=>[b.id,b]));
+  const issues=[];
+
+  function issue(type,severity,entityId,details){
+    if(issues.length>=100)return;
+    issues.push({type,severity,entityId,details});
+  }
+
+  for(const booking of bookings){
+    const status=normalizeStatus(booking.status);
+    const isActive=ACTIVE_STATUSES.has(status)||status==="cancellation_requested";
+    const partnerId=String(booking.partnerId||"").trim();
+
+    if(["partner_assigned","partner_on_the_way","service_started","cancellation_requested"].includes(status) && !partnerId){
+      issue("booking_missing_partner","high",booking.id,{status});
+    }
+
+    if(["requested","searching_partner"].includes(status) && partnerId){
+      issue("booking_has_stale_partner","high",booking.id,{status,partnerId});
+    }
+
+    if(booking.partnerAccepted===true && !partnerId){
+      issue("booking_accepted_without_partner","high",booking.id,{status});
+    }
+
+    if(isActive && partnerId){
+      const partner=partnerMap.get(partnerId);
+      if(!partner){
+        issue("booking_partner_missing","high",booking.id,{status,partnerId});
+      }else{
+        if(partner.currentBookingId!==booking.id){
+          issue("partner_booking_pointer_mismatch","high",booking.id,{status,partnerId,currentBookingId:partner.currentBookingId||null});
+        }
+        if(status==="partner_assigned" && partner.approved!==true){
+          issue("assigned_to_unapproved_partner","high",booking.id,{partnerId});
+        }
+        if(status==="partner_assigned" && partner.online!==true){
+          issue("assigned_to_offline_partner","medium",booking.id,{partnerId});
+        }
+      }
+    }
+
+    if(status==="completed"){
+      if(!booking.completedAt)issue("completed_missing_timestamp","medium",booking.id,{});
+      if(!booking.completionProofUrl)issue("completed_missing_proof","high",booking.id,{});
+      else if(booking.completionProofVerified!==true)issue("completed_proof_unverified","medium",booking.id,{});
+    }
+
+    if(status==="cancellation_requested" && !booking.cancellationPreviousStatus){
+      issue("cancellation_missing_previous_status","high",booking.id,{});
+    }
+
+    if(["completed","cancelled"].includes(status) && partnerId){
+      const partner=partnerMap.get(partnerId);
+      if(partner?.currentBookingId===booking.id){
+        issue("terminal_booking_still_claimed","high",booking.id,{partnerId});
+      }
+    }
+  }
+
+  for(const partner of partners){
+    const currentBookingId=String(partner.currentBookingId||"").trim();
+    const activeJobs=Math.max(0,Number(partner.activeJobs||0));
+
+    if(activeJobs>1){
+      issue("partner_active_jobs_overflow","high",partner.id,{activeJobs});
+    }
+
+    if(activeJobs>0 && !currentBookingId){
+      issue("partner_active_jobs_without_booking","high",partner.id,{activeJobs});
+    }
+
+    if(activeJobs===0 && currentBookingId){
+      issue("partner_booking_without_active_job","high",partner.id,{currentBookingId});
+    }
+
+    if(partner.available===true && partner.online!==true){
+      issue("partner_available_offline","high",partner.id,{});
+    }
+
+    if(partner.approved!==true && (partner.online===true||partner.available===true)){
+      issue("unapproved_partner_operational","high",partner.id,{approved:partner.approved===true,online:partner.online===true,available:partner.available===true});
+    }
+
+    if(currentBookingId){
+      const booking=bookingMap.get(currentBookingId);
+      if(!booking){
+        issue("partner_points_to_missing_booking","high",partner.id,{currentBookingId});
+      }else{
+        const status=normalizeStatus(booking.status);
+        if(!ACTIVE_STATUSES.has(status) && status!=="cancellation_requested"){
+          issue("partner_points_to_terminal_booking","high",partner.id,{currentBookingId,status});
+        }
+        if(String(booking.partnerId||"")!==partner.id){
+          issue("partner_booking_reverse_pointer_mismatch","high",partner.id,{currentBookingId,bookingPartnerId:booking.partnerId||null});
+        }
+      }
+    }
+  }
+
+  const severityCounts=issues.reduce((acc,item)=>{
+    acc[item.severity]=(acc[item.severity]||0)+1;
+    return acc;
+  },{});
+
+  await auditSecurityEvent({
+    type:"booking_lifecycle_audit",
+    uid:adminUid,
+    metadata:{
+      bookingsChecked:bookings.length,
+      partnersChecked:partners.length,
+      issueCount:issues.length,
+      severityCounts
+    }
+  });
+
+  return {
+    ok:true,
+    generatedAt:new Date().toISOString(),
+    checked:{bookings:bookings.length,partners:partners.length},
+    issues,
+    summary:{issueCount:issues.length,severityCounts}
+  };
+});
+
+
 exports.health=onCall(CALLABLE_OPTIONS,()=>({ok:true,service:"near-family-functions"}));
 
 const SERVICE_CATALOG={
