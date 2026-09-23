@@ -120,3 +120,17 @@ Every customer UI screen or independently meaningful UI component must have its 
 Wrapper files may only contain layout slots or composition markup. They must not contain the complete child screens.
 
 The same principle applies to Partner and Admin: keep entry files lightweight and place feature UI and logic in focused files.
+
+
+## Native Customer mobile app
+
+The actual Customer mobile application is Flutter and lives under `customer_app/`.
+
+Required rules:
+1. `customer_app/` is the source of truth for the Customer mobile application.
+2. Do not convert the Customer mobile app into an HTML/WebView wrapper.
+3. Keep screens in separate Dart files under `customer_app/lib/screens/`.
+4. Keep models, data, state, theme and reusable widgets in separate directories/files.
+5. `customer_app/lib/main.dart` must remain a lightweight entry point.
+6. The root `customer/` HTML/CSS/JS frontend is not the native Customer mobile application.
+7. Do not merge all Customer mobile code into a single Dart file.
