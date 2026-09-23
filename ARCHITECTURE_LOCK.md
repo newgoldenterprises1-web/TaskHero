@@ -33,6 +33,29 @@ Partner UI is also multi-file:
 
 Do not merge the partner application back into a monolithic `partner.html`.
 
+## Customer and Partner application boundary
+
+Customer and Partner are two separate applications and must remain separate.
+
+### Customer
+- Entry: `index.html`
+- UI: `customer/pages/`
+- JS: `customer/js/`
+- CSS: `customer/css/`
+
+### Partner
+- Entry: `partner.html`
+- JS: `partner/js/`
+- CSS: `partner/css/`
+
+Rules:
+1. Never merge Customer and Partner screens into one application shell.
+2. Never load Partner pages/components into the Customer app.
+3. Never load Customer pages/components into the Partner app.
+4. Do not share UI files between Customer and Partner.
+5. Shared backend/API contracts may be reused, but frontend application files remain separate.
+6. A future developer must preserve this separation unless the user explicitly requests an architecture change.
+
 ## Admin application
 
 Admin UI logic and styling remain separated:
