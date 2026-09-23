@@ -855,8 +855,9 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
       // This prevents a late completion/cancellation from clearing a newer job.
       if(partner.currentBookingId===bookingId){
         const shouldDecrement=b.partnerAccepted===true;
+        const currentJobs=Math.max(0,Number(partner.activeJobs||0));
         tx.update(partnerRef,{
-          ...(shouldDecrement?{activeJobs:FieldValue.increment(-1)}:{}),
+          ...(shouldDecrement?{activeJobs:Math.max(0,currentJobs-1)}:{}),
           currentBookingId:FieldValue.delete(),
           updatedAt:FieldValue.serverTimestamp()
         });
@@ -920,11 +921,12 @@ exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
       const partnerSnap=await tx.get(partnerRef);
       const partner=partnerSnap.data()||{};
       if(partner.currentBookingId===bookingId){
+        const currentJobs=Math.max(0,Number(partner.activeJobs||0));
         const patch={
           currentBookingId:FieldValue.delete(),
           updatedAt:FieldValue.serverTimestamp()
         };
-        if(b.partnerAccepted===true)patch.activeJobs=FieldValue.increment(-1);
+        if(b.partnerAccepted===true)patch.activeJobs=Math.max(0,currentJobs-1);
         tx.update(partnerRef,patch);
       }
     }
