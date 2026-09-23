@@ -23,8 +23,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String query = '';
 
-  static const _popularHeroImage = 'https://images.unsplash.com/photo-1773227055624-07b515ba87c5?auto=format&fit=crop&fm=jpg&q=85&w=1200';
-  static const _bulkHeroImage = 'https://images.unsplash.com/photo-1776093745657-8e3e03b79aea?auto=format&fit=crop&fm=jpg&q=85&w=1200';
+  static const _popularHeroImage = 'https://images.unsplash.com/photo-1758686253706-15c16f83743a?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=80&w=1200';
+  static const _bulkHeroImage = 'https://images.unsplash.com/photo-1678274324663-afc2c68eeeec?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=80&w=1200';
 
   static const _serviceImages = <int, String>{
     1: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=900&auto=format&fit=crop',
