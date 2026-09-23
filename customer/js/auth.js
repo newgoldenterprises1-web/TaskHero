@@ -50,34 +50,19 @@ async function signup(){
   startApp();
 }
 
-async function hydrateCustomerCloudData(){
-  if(!window.NearFamilyBackend?.ready)return;
-  try{
-    const [families,addresses,bookings]=await Promise.all([
-      NearFamilyBackend.listFamilyMembers(),
-      NearFamilyBackend.listAddresses(),
-      NearFamilyBackend.listBookings()
-    ]);
-    if(Array.isArray(families))state.families=families.map(f=>({
-      id:f.id,name:f.name||'',relationship:f.relationship||'Family',phone:f.phone||'',address:f.address||''
-    }));
-    if(Array.isArray(addresses))state.addresses=addresses.map(a=>typeof a==='string'?a:{id:a.id,address:a.address||''}).filter(a=>typeof a==='string'?a.trim():a.address.trim());
-    if(Array.isArray(bookings))state.bookings=bookings.map(b=>({
-      ...b,createdAt:b.createdAt?.toDate?b.createdAt.toDate().toISOString():(b.createdAt||new Date().toISOString()),
-      updatedAt:b.updatedAt?.toDate?b.updatedAt.toDate().toISOString():b.updatedAt
-    }));
-    save();renderAll();
-  }catch(e){console.warn('Customer cloud hydration unavailable; local data retained',e)}
-}
-
 async function startApp(){
   $('splash').style.display='none';$('auth').classList.remove('active');$('app').classList.add('active');
   $('hello').textContent='Hi, '+(state.user?.name?.split(' ')[0]||'there')+' 👋';
   $('profileName').textContent=state.user?.name||'Customer';$('profilePhone').textContent=state.user?.phone||'';
-  renderAll();requestLocation();
+  renderAll();ensureLocation();
   if(window.NearFamilyBackend?.ready&&state.user){
     try{await NearFamilyBackend.saveUser({name:state.user.name,phone:state.user.phone});}catch(e){console.warn('User cloud sync unavailable',e)}
-    await hydrateCustomerCloudData();subscribeToBookingUpdates();await setupCustomerPushNotifications();
+    if(!state.cloudHydrated){
+      await syncCustomerData();
+      await syncCloudBookings();
+    }
+    subscribeToBookingUpdates();
+    await setupCustomerPushNotifications();
   }
 }
 
@@ -86,7 +71,7 @@ async function logout(){
   if(window.NearFamilyBackend?.ready){
     try{await NearFamilyBackend.signOut()}catch(e){console.warn('Firebase sign-out failed',e)}
   }
-  state.user=null;save();
+  state.user=null;state.cloudHydrated=false;save();
   $('app').classList.remove('active');$('auth').classList.add('active');toggleAuth(false);
   toast('Logged out');
 }

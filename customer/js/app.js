@@ -12,10 +12,12 @@ let state={
   location:savedLocation&&typeof savedLocation==='object'?{
     label:String(savedLocation.label||''),
     lat:savedLocation.lat??null,
-    lng:savedLocation.lng??null
-  }:{label:'',lat:null,lng:null},
+    lng:savedLocation.lng??null,
+    capturedAt:Number(savedLocation.capturedAt||0)
+  }:{label:'',lat:null,lng:null,capturedAt:0},
   unsubscribeBookings:null,
-  bookingSubmitting:false
+  bookingSubmitting:false,
+  cloudHydrated:false
 };
 
 function save(){
