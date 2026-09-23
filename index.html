@@ -198,7 +198,10 @@ async function confirmBooking(){
   const selectedFiles=Array.from($('photos').files||[]).slice(0,5);if(selectedFiles.some(f=>!f.type.startsWith('image/')))return toast('Only image files can be uploaded.');if(selectedFiles.some(f=>f.size>8*1024*1024))return toast('Each photo must be 8 MB or smaller.');
   state.bookingSubmitting=true;const submitButton=[...document.querySelectorAll('#bookingModal button')].find(b=>b.textContent.trim()==='Confirm Request');if(submitButton){submitButton.disabled=true;submitButton.textContent='Submitting...';submitButton.classList.add('opacity-60','cursor-not-allowed')}
   try{
-    const payload={service:s.n,category:s.c,price:s.p,name,phone,for:target,forWho:$('forWho').value,familyMemberId,address:addr,date,time,instructions:$('instructions').value.trim(),photos:[],location:(state.location.lat!=null&&state.location.lng!=null)?{lat:Number(state.location.lat),lng:Number(state.location.lng),label:state.location.label||'Current location'}:null};
+    const savedAddress=state.addresses.find(x=>(typeof x==='string'?x:x.address)===addr);
+    const addressId=(savedAddress&&typeof savedAddress==='object'&&savedAddress.id)?String(savedAddress.id):null;
+    const clientRequestId=(window.crypto&&typeof window.crypto.randomUUID==='function')?window.crypto.randomUUID():('nf_'+Date.now()+'_'+Math.random().toString(36).slice(2,14));
+    const payload={service:s.n,category:s.c,price:s.p,name,phone,for:target,forWho:$('forWho').value,familyMemberId,address:addr,addressId,clientRequestId,date,time,instructions:$('instructions').value.trim(),photos:[],location:(state.location.lat!=null&&state.location.lng!=null)?{lat:Number(state.location.lat),lng:Number(state.location.lng),label:state.location.label||'Current location'}:null};
     let b;
     if(NearFamilyBackend.ready){
       const id=await NearFamilyBackend.createBooking(payload);b={...payload,id,status:'requested',createdAt:new Date().toISOString()};
