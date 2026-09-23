@@ -234,7 +234,9 @@ exports.setPartnerApproval=onCall(CALLABLE_OPTIONS,async(request)=>{
     if(!bookingSnap.exists)return;
 
     const booking=bookingSnap.data()||{};
-    if(booking.partnerId!==partnerId || !ACTIVE_STATUSES.has(normalizeStatus(booking.status)))return;
+    const bookingStatus=normalizeStatus(booking.status);
+    const releasableStatus=ACTIVE_STATUSES.has(bookingStatus) || bookingStatus==="cancellation_requested";
+    if(booking.partnerId!==partnerId || !releasableStatus)return;
 
     if(booking.partnerAccepted===true){
       tx.update(bookingRef,{
