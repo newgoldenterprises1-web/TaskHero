@@ -847,15 +847,20 @@ exports.updateJobStatus=onCall(CALLABLE_OPTIONS,async(request)=>{
     }
     if(next==="cancelled")patch.cancelledAt=FieldValue.serverTimestamp();
     tx.update(ref,patch);
-    if((next==="completed" || next==="cancelled") && b.partnerAccepted===true){
+    if(next==="completed" || next==="cancelled"){
       const partnerRef=db.collection("partners").doc(uid);
       const partnerSnap=await tx.get(partnerRef);
-      const currentJobs=Math.max(0,Number(partnerSnap.data()?.activeJobs||0));
-      tx.update(partnerRef,{
-        activeJobs:Math.max(0,currentJobs-1),
-        currentBookingId:FieldValue.delete(),
-        updatedAt:FieldValue.serverTimestamp()
-      });
+      const partner=partnerSnap.data()||{};
+      // Only release this partner's slot when this booking still owns it.
+      // This prevents a late completion/cancellation from clearing a newer job.
+      if(partner.currentBookingId===bookingId){
+        const shouldDecrement=b.partnerAccepted===true;
+        tx.update(partnerRef,{
+          ...(shouldDecrement?{activeJobs:FieldValue.increment(-1)}:{}),
+          currentBookingId:FieldValue.delete(),
+          updatedAt:FieldValue.serverTimestamp()
+        });
+      }
     }
     result={ok:true,status:next};
   });
@@ -870,17 +875,28 @@ exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
   const decision=String(request.data?.decision||"").toLowerCase();
   if(!bookingId || bookingId.length>128 || !["approve","reject"].includes(decision)) throw new Error("Invalid cancellation resolution");
   await rateLimit(request.auth.uid,"resolve_cancel");
+
   const isAdmin=request.auth.token?.admin===true;
+  if(!isAdmin){
+    const {partner}=await requirePartnerBase(request);
+    if(partner.approved!==true) throw new Error("Partner is not approved yet");
+  }
+
   const ref=db.collection("bookings").doc(bookingId);
   let result;
+  let shouldRedispatch=false;
   await db.runTransaction(async(tx)=>{
     const snap=await tx.get(ref);
     if(!snap.exists) throw new Error("Booking not found");
     const b=snap.data()||{};
     if(b.status!=="cancellation_requested") throw new Error("Cancellation is not pending");
     if(!isAdmin && b.partnerId!==request.auth.uid) throw new Error("Not authorized to resolve this cancellation");
+
+    const previousStatus=normalizeStatus(b.cancellationPreviousStatus);
+    const fallbackStatus=b.partnerAccepted===true?"partner_assigned":(b.partnerId?"partner_assigned":"searching_partner");
+    const restoredStatus=ACTIVE_STATUSES.has(previousStatus)?previousStatus:fallbackStatus;
+
     if(decision==="reject"){
-      const restoredStatus=b.partnerAccepted===true?"partner_assigned":"searching_partner";
       tx.update(ref,{
         status:restoredStatus,
         cancellationRejectedAt:FieldValue.serverTimestamp(),
@@ -890,7 +906,7 @@ exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
       result={status:restoredStatus};
       return;
     }
-    const partnerWasAccepted=b.partnerAccepted===true;
+
     tx.update(ref,{
       status:"cancelled",
       cancelledAt:FieldValue.serverTimestamp(),
@@ -898,21 +914,32 @@ exports.resolveBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
       cancellationResolvedBy:request.auth.uid,
       updatedAt:FieldValue.serverTimestamp()
     });
-    if(partnerWasAccepted && b.partnerId){
+
+    if(b.partnerId){
       const partnerRef=db.collection("partners").doc(b.partnerId);
       const partnerSnap=await tx.get(partnerRef);
-      const jobs=Math.max(0,Number(partnerSnap.data()?.activeJobs||0));
-      tx.update(partnerRef,{activeJobs:Math.max(0,jobs-1),currentBookingId:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()});
+      const partner=partnerSnap.data()||{};
+      if(partner.currentBookingId===bookingId){
+        const patch={
+          currentBookingId:FieldValue.delete(),
+          updatedAt:FieldValue.serverTimestamp()
+        };
+        if(b.partnerAccepted===true)patch.activeJobs=FieldValue.increment(-1);
+        tx.update(partnerRef,patch);
+      }
     }
     result={status:"cancelled"};
   });
+
   await auditSecurityEvent({
     type:"booking_cancellation_resolved",
     uid:request.auth.uid,
     bookingId,
     decision,
-    isAdmin
+    isAdmin,
+    status:result.status
   });
+
   return {ok:true,...result};
 });
 
@@ -932,6 +959,7 @@ exports.requestBookingCancellation=onCall(CALLABLE_OPTIONS,async(request)=>{
     partnerId=b.partnerId||null;
     tx.update(ref,{
       status:"cancellation_requested",
+      cancellationPreviousStatus:b.status,
       cancellationRequestedAt:FieldValue.serverTimestamp(),
       updatedAt:FieldValue.serverTimestamp()
     });
