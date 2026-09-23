@@ -84,3 +84,24 @@ Backend/business logic remains separate from UI:
 7. This architecture lock applies to future Near Family development unless the user explicitly changes it.
 
 Verified structure at lock time: root `index.html` is a loader, customer screens are split, and admin JS/CSS are separate files.
+
+## Non-monolithic code requirement
+
+Customer and Partner are two separate applications. They must never be merged into one app or one frontend entry file.
+
+Customer:
+- Separate shell: `index.html`
+- Separate UI files under `customer/pages/`
+- Separate logic under `customer/js/`
+- Separate styles under `customer/css/`
+
+Partner:
+- Separate shell: `partner.html`
+- Separate logic under `partner/js/`
+- Separate styles under `partner/css/`
+
+Both applications must remain modular. Do not put complete screens, all application logic, or a long feature implementation into one entry HTML file.
+
+Keep files reasonably small and responsibility-focused. New features should be split into the appropriate page/module/style file rather than making an existing entry file excessively long.
+
+Customer and Partner may share backend services/API contracts, but their frontend codebases, screens, navigation, and state logic remain separate.
