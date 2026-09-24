@@ -19,5 +19,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/popular_services_hero.jpg
-    - assets/images/community_bulk_orders_hero.jpg
+    - assets/images/popular_services_hero.svg
+    - assets/images/community_bulk_orders_hero.svg
