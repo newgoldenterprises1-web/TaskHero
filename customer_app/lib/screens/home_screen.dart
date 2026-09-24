@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -23,8 +24,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String query = '';
 
-  static const _popularHeroImage = 'assets/images/popular_services_hero.jpg';
-  static const _bulkHeroImage = 'assets/images/community_bulk_orders_hero.jpg';
+  static const _popularHeroAsset = 'assets/images/popular_services_hero.svg';
+  static const _bulkHeroAsset = 'assets/images/community_bulk_orders_hero.svg';
 
   static const _serviceImages = <int, String>{
     1: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=900&auto=format&fit=crop',
@@ -185,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.favorite_rounded,
                       accent: NFColors.peach,
                       action: 'View All Services',
-                      imageUrl: _popularHeroImage,
+                      assetPath: _popularHeroAsset,
                       onTap: () {
                         if (widget.state.services.isNotEmpty) {
                           Navigator.push(
@@ -209,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.groups_rounded,
                       accent: NFColors.earth,
                       action: 'Get Bulk Quote',
-                      imageUrl: _bulkHeroImage,
+                      assetPath: _bulkHeroAsset,
                       onTap: widget.onOpenBulkOrders,
                     ),
                   ),
@@ -498,7 +499,7 @@ class _FeatureCard extends StatelessWidget {
   final IconData icon;
   final Color accent;
   final String action;
-  final String imageUrl;
+  final String assetPath;
   final VoidCallback onTap;
 
   const _FeatureCard({
@@ -507,7 +508,7 @@ class _FeatureCard extends StatelessWidget {
     required this.icon,
     required this.accent,
     required this.action,
-    required this.imageUrl,
+    required this.assetPath,
     required this.onTap,
   });
 
@@ -527,10 +528,11 @@ class _FeatureCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            ServiceImage(
-              url: imageUrl,
-              height: 292,
-              borderRadius: BorderRadius.zero,
+            Positioned.fill(
+              child: SvgPicture.asset(
+                assetPath,
+                fit: BoxFit.cover,
+              ),
             ),
             DecoratedBox(
               decoration: BoxDecoration(
